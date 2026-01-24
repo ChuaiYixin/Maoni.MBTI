@@ -4,10 +4,12 @@ import logo from '../../57f50fc94153da8d3a1c653ffcc60976.jpg'
 
 function Welcome({ onStart }) {
   const [isLargeScreen, setIsLargeScreen] = useState(false)
+  const [isPortrait, setIsPortrait] = useState(false)
 
   useEffect(() => {
     const checkScreen = () => {
       setIsLargeScreen(window.innerWidth >= 1024)
+      setIsPortrait(window.innerHeight > window.innerWidth)
     }
     checkScreen()
     window.addEventListener('resize', checkScreen)
@@ -105,118 +107,229 @@ function Welcome({ onStart }) {
       </div>
 
       <div className="relative z-20 w-full max-w-7xl mx-auto px-4 md:px-8 lg:px-12">
-        <div className="flex flex-col lg:flex-row items-center lg:items-center gap-8 lg:gap-12">
-          {/* Logo 左侧，向左移动网页宽度的十分之一 */}
-          <motion.div
-            className="flex-shrink-0"
-            initial={{ opacity: 0, x: -100 }}
-            animate={{ 
-              opacity: 1, 
-              x: isLargeScreen ? '-10vw' : 0 
-            }}
-            transition={{
-              type: 'spring',
-              stiffness: 100,
-              damping: 15,
-              delay: 0.2
-            }}
-          >
-            <div className="relative">
-              <motion.div
-                className="w-[512px] h-[512px] md:w-[640px] md:h-[640px] lg:w-[768px] lg:h-[768px] rounded-full overflow-hidden border-8 md:border-12 border-white shadow-2xl"
-                whileHover={{ scale: 1.05, rotate: 5 }}
-                transition={{ duration: 0.3 }}
-              >
-                <img
-                  src={logo}
-                  alt="MBTI Logo"
-                  className="w-full h-full object-cover"
-                />
-              </motion.div>
-              <motion.div
-                className="absolute inset-0 rounded-full bg-gradient-to-r from-pink-400/40 via-purple-400/40 to-pink-400/40 blur-3xl -z-10"
-                animate={{
-                  scale: [1, 1.3, 1],
-                  opacity: [0.4, 0.7, 0.4],
-                }}
-                transition={{
-                  duration: 4,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-              />
-            </div>
-          </motion.div>
-
-          {/* 右侧文字和按钮：以按钮中轴线居中对齐，向左移动十分之一 */}
-          <motion.div
-            className="flex-1 flex flex-col items-center justify-center"
-            initial={{ opacity: 0, x: 100 }}
-            animate={{ 
-              opacity: 1, 
-              x: isLargeScreen ? '-10vw' : 0 
-            }}
-            transition={{ delay: 0.4, duration: 0.6 }}
-          >
-            {/* 第一排：Maoni MBTI 大字（同一排） */}
-            <h1 className="text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black gradient-text leading-[0.9] mb-2 whitespace-nowrap">
-              Maoni MBTI
-            </h1>
-            
-            {/* 第二排：人格测试 中字 */}
-            <h2 className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-pink-600 leading-[0.9] mb-8">
-              人格测试
-            </h2>
-            
-            {/* 第三排：按钮 */}
+        {isPortrait ? (
+          /* 竖屏布局：Logo 在上，文字按钮在下 */
+          <div className="flex flex-col items-center justify-center gap-6 md:gap-8">
+            {/* Logo 上方居中 */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              className="flex-shrink-0"
+              initial={{ opacity: 0, y: -50 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.8 }}
+              transition={{
+                type: 'spring',
+                stiffness: 100,
+                damping: 15,
+                delay: 0.2
+              }}
             >
-              <motion.button
-                onClick={onStart}
-                className="btn-primary text-xl md:text-2xl lg:text-3xl px-12 md:px-16 py-5 md:py-6 lg:py-8 relative overflow-hidden"
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.95 }}
-              >
+              <div className="relative">
                 <motion.div
-                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                  className="w-[280px] h-[280px] sm:w-[320px] sm:h-[320px] md:w-[360px] md:h-[360px] rounded-full overflow-hidden border-6 md:border-8 border-white shadow-2xl"
+                  whileHover={{ scale: 1.05, rotate: 5 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <img
+                    src={logo}
+                    alt="MBTI Logo"
+                    className="w-full h-full object-cover"
+                  />
+                </motion.div>
+                <motion.div
+                  className="absolute inset-0 rounded-full bg-gradient-to-r from-pink-400/40 via-purple-400/40 to-pink-400/40 blur-3xl -z-10"
                   animate={{
-                    x: ['-100%', '200%'],
+                    scale: [1, 1.3, 1],
+                    opacity: [0.4, 0.7, 0.4],
                   }}
                   transition={{
-                    duration: 2,
+                    duration: 4,
                     repeat: Infinity,
-                    repeatDelay: 1,
                     ease: "easeInOut"
                   }}
                 />
-                <span className="relative flex items-center justify-center space-x-3">
-                  <span className="text-3xl md:text-4xl">🚀</span>
-                  <span>开始测试</span>
-                </span>
-              </motion.button>
+              </div>
             </motion.div>
 
-            {/* 提示小字 */}
+            {/* 文字和按钮下方居中 */}
             <motion.div
-              className="pt-4 space-y-2 text-sm md:text-base lg:text-lg text-gray-500 text-center"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1 }}
+              className="flex flex-col items-center justify-center"
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.6 }}
             >
-              <div className="flex items-center justify-center space-x-2">
-                <span>📝</span>
-                <p>每题选择与你最贴合的选项，如实作答即可</p>
-              </div>
-              <div className="flex items-center justify-center space-x-2">
-                <span>⏱️</span>
-                <p>约 2–3 分钟即可完成</p>
+              {/* 第一排：Maoni MBTI 大字 */}
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-black gradient-text leading-[0.9] mb-2 whitespace-nowrap">
+                Maoni MBTI
+              </h1>
+              
+              {/* 第二排：人格测试 中字 */}
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pink-600 leading-[0.9] mb-6 md:mb-8">
+                人格测试
+              </h2>
+              
+              {/* 第三排：按钮 */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8 }}
+              >
+                <motion.button
+                  onClick={onStart}
+                  className="btn-primary text-lg sm:text-xl md:text-2xl px-10 sm:px-12 md:px-14 py-4 sm:py-5 md:py-6 relative overflow-hidden"
+                  whileHover={{ scale: 1.08 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                    animate={{
+                      x: ['-100%', '200%'],
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      repeatDelay: 1,
+                      ease: "easeInOut"
+                    }}
+                  />
+                  <span className="relative flex items-center justify-center space-x-3">
+                    <span className="text-2xl sm:text-3xl md:text-4xl">🚀</span>
+                    <span>开始测试</span>
+                  </span>
+                </motion.button>
+              </motion.div>
+
+              {/* 提示小字 */}
+              <motion.div
+                className="pt-4 space-y-2 text-xs sm:text-sm md:text-base text-gray-500 text-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1 }}
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <span>📝</span>
+                  <p>每题选择与你最贴合的选项，如实作答即可</p>
+                </div>
+                <div className="flex items-center justify-center space-x-2">
+                  <span>⏱️</span>
+                  <p>约 2–3 分钟即可完成</p>
+                </div>
+              </motion.div>
+            </motion.div>
+          </div>
+        ) : (
+          /* 横屏布局：Logo 在左，文字按钮在右（保持原有逻辑） */
+          <div className="flex flex-col lg:flex-row items-center lg:items-center gap-8 lg:gap-12">
+            {/* Logo 左侧，向左移动网页宽度的十分之一 */}
+            <motion.div
+              className="flex-shrink-0"
+              initial={{ opacity: 0, x: -100 }}
+              animate={{ 
+                opacity: 1, 
+                x: isLargeScreen ? '-10vw' : 0 
+              }}
+              transition={{
+                type: 'spring',
+                stiffness: 100,
+                damping: 15,
+                delay: 0.2
+              }}
+            >
+              <div className="relative">
+                <motion.div
+                  className="w-[512px] h-[512px] md:w-[640px] md:h-[640px] lg:w-[768px] lg:h-[768px] rounded-full overflow-hidden border-8 md:border-12 border-white shadow-2xl"
+                  whileHover={{ scale: 1.05, rotate: 5 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <img
+                    src={logo}
+                    alt="MBTI Logo"
+                    className="w-full h-full object-cover"
+                  />
+                </motion.div>
+                <motion.div
+                  className="absolute inset-0 rounded-full bg-gradient-to-r from-pink-400/40 via-purple-400/40 to-pink-400/40 blur-3xl -z-10"
+                  animate={{
+                    scale: [1, 1.3, 1],
+                    opacity: [0.4, 0.7, 0.4],
+                  }}
+                  transition={{
+                    duration: 4,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                />
               </div>
             </motion.div>
-          </motion.div>
-        </div>
+
+            {/* 右侧文字和按钮：以按钮中轴线居中对齐，向左移动十分之一 */}
+            <motion.div
+              className="flex-1 flex flex-col items-center justify-center"
+              initial={{ opacity: 0, x: 100 }}
+              animate={{ 
+                opacity: 1, 
+                x: isLargeScreen ? '-10vw' : 0 
+              }}
+              transition={{ delay: 0.4, duration: 0.6 }}
+            >
+              {/* 第一排：Maoni MBTI 大字（同一排） */}
+              <h1 className="text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black gradient-text leading-[0.9] mb-2 whitespace-nowrap">
+                Maoni MBTI
+              </h1>
+              
+              {/* 第二排：人格测试 中字 */}
+              <h2 className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-pink-600 leading-[0.9] mb-8">
+                人格测试
+              </h2>
+              
+              {/* 第三排：按钮 */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8 }}
+              >
+                <motion.button
+                  onClick={onStart}
+                  className="btn-primary text-xl md:text-2xl lg:text-3xl px-12 md:px-16 py-5 md:py-6 lg:py-8 relative overflow-hidden"
+                  whileHover={{ scale: 1.08 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                    animate={{
+                      x: ['-100%', '200%'],
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      repeatDelay: 1,
+                      ease: "easeInOut"
+                    }}
+                  />
+                  <span className="relative flex items-center justify-center space-x-3">
+                    <span className="text-3xl md:text-4xl">🚀</span>
+                    <span>开始测试</span>
+                  </span>
+                </motion.button>
+              </motion.div>
+
+              {/* 提示小字 */}
+              <motion.div
+                className="pt-4 space-y-2 text-sm md:text-base lg:text-lg text-gray-500 text-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1 }}
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <span>📝</span>
+                  <p>每题选择与你最贴合的选项，如实作答即可</p>
+                </div>
+                <div className="flex items-center justify-center space-x-2">
+                  <span>⏱️</span>
+                  <p>约 2–3 分钟即可完成</p>
+                </div>
+              </motion.div>
+            </motion.div>
+          </div>
+        )}
       </div>
     </div>
   )
