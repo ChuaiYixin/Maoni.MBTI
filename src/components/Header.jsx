@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import logo from '../../57f50fc94153da8d3a1c653ffcc60976.jpg'
 
-function Header() {
+function Header({ user, authLoading, onOpenAuth, onSignOut, onOpenProfile }) {
   return (
     <motion.header 
       className="glass-effect sticky top-0 z-50 shadow-lg"
@@ -28,13 +28,52 @@ function Header() {
           </div>
         </div>
         
-        <motion.div
-          className="hidden md:flex items-center space-x-1.5 px-2 py-1 rounded-full bg-gradient-to-r from-purple-100 to-pink-100"
-          whileHover={{ scale: 1.05 }}
-        >
-          <span className="text-base">✨</span>
-          <span className="text-sm font-semibold text-purple-700">人格测试</span>
-        </motion.div>
+        <div className="flex items-center gap-2">
+          {!authLoading && (
+            user ? (
+              <div className="flex items-center gap-2">
+                <motion.button
+                  type="button"
+                  onClick={onOpenProfile}
+                  className="text-xs font-medium text-purple-600 hover:text-purple-700 px-2 py-1.5 rounded-lg hover:bg-purple-50 transition"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  个人中心
+                </motion.button>
+                <span className="hidden sm:inline text-xs text-gray-600 truncate max-w-[120px] md:max-w-[180px]" title={user.email}>
+                  {user.email}
+                </span>
+                <motion.button
+                  type="button"
+                  onClick={onSignOut}
+                  className="text-xs font-medium text-purple-600 hover:text-purple-700 px-2 py-1.5 rounded-lg hover:bg-purple-50 transition"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  退出登录
+                </motion.button>
+              </div>
+            ) : (
+              <motion.button
+                type="button"
+                onClick={onOpenAuth}
+                className="text-xs font-semibold text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-full transition"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                登录
+              </motion.button>
+            )
+          )}
+          <motion.div
+            className="hidden md:flex items-center space-x-1.5 px-2 py-1 rounded-full bg-gradient-to-r from-purple-100 to-pink-100"
+            whileHover={{ scale: 1.05 }}
+          >
+            <span className="text-base">✨</span>
+            <span className="text-sm font-semibold text-purple-700">人格测试</span>
+          </motion.div>
+        </div>
       </div>
     </motion.header>
   )

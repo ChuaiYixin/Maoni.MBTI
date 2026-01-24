@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import questionsData from '../../mbti-questions.json'
+import { supabase } from '../lib/supabaseClient'
 
 function shuffleQuestions(arr) {
   const a = [...arr]
@@ -62,7 +63,7 @@ function isDimensionDone(progressSum) {
   return progressSum >= THRESHOLD_PER_DIM
 }
 
-function MBTITest({ onBackToHome }) {
+function MBTITest({ onBackToHome, user }) {
   const [shuffledQuestions, setShuffledQuestions] = useState(buildShuffledQuestions)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [answersByDim, setAnswersByDim] = useState({ EI: [], SN: [], TF: [], JP: [] })
@@ -70,6 +71,7 @@ function MBTITest({ onBackToHome }) {
   const [showResult, setShowResult] = useState(false)
   const [resultProbabilities, setResultProbabilities] = useState(null)
   const [selectedIndex, setSelectedIndex] = useState(null)
+  const [savedToHistory, setSavedToHistory] = useState(false)
 
   // 各维度当前进度分合计（只累加 progressScore，用于进度条与动态题量）
   const progressByDim = useMemo(() => {
@@ -137,6 +139,46 @@ function MBTITest({ onBackToHome }) {
     return out
   }, [])
 
+  // 生成 result_hash（SHA-256）
+  const generateResultHash = async (testVersion, type, scores) => {
+    const sortedScores = Object.keys(scores)
+      .sort()
+      .reduce((acc, key) => {
+        acc[key] = scores[key]
+        return acc
+      }, {})
+    const payload = JSON.stringify({ testVersion, type, scores: sortedScores })
+    const encoder = new TextEncoder()
+    const data = encoder.encode(payload)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+  }
+
+  // 保存测试历史记录
+  const saveTestHistory = useCallback(async (type, scores) => {
+    if (!user || !supabase) {
+      setSavedToHistory(false)
+      return
+    }
+    try {
+      const testVersion = 'v1'
+      const resultHash = await generateResultHash(testVersion, type, scores)
+      const { error } = await supabase.from('mbti_attempts').insert({
+        user_id: user.id,
+        test_version: testVersion,
+        type,
+        scores,
+        result_hash: resultHash,
+      })
+      if (error) throw error
+      setSavedToHistory(true)
+    } catch (err) {
+      console.error('保存测试历史失败:', err)
+      setSavedToHistory(false)
+    }
+  }, [user])
+
   // 用维度分计算 16 型概率，不依赖 state，避免漏算最后一题
   const calculateResultFromAnswers = useCallback((answersByDimSource) => {
     const all = flattenDimensionScores(answersByDimSource)
@@ -175,7 +217,8 @@ function MBTITest({ onBackToHome }) {
     const mostLikely = sorted[0][0]
     setResultProbabilities({ mostLikely, all: sorted })
     setShowResult(true)
-  }, [flattenDimensionScores])
+    saveTestHistory(mostLikely, scores)
+  }, [flattenDimensionScores, saveTestHistory])
 
   const handleAnswer = (scoreA, scoreB, optionIndex, q, questionIndex) => {
     const dim = getDimension(q)
@@ -239,6 +282,7 @@ function MBTITest({ onBackToHome }) {
     setUsedQuestionIndices(new Set())
     setShowResult(false)
     setResultProbabilities(null)
+    setSavedToHistory(false)
   }, [])
 
   const handleOptionClick = (optIndex, scoreA, scoreB, q, questionIndex) => {
@@ -317,6 +361,16 @@ function MBTITest({ onBackToHome }) {
 
           <motion.div className="text-center mt-8 space-y-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}>
             <p className="text-lg text-gray-600">🎉 测试完成！共答 {answeredTotal} 题</p>
+            {savedToHistory && (
+              <motion.p className="text-sm text-green-600" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.3 }}>
+                ✓ 已保存到历史记录
+              </motion.p>
+            )}
+            {!user && (
+              <motion.p className="text-sm text-gray-500" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.3 }}>
+                💡 登录可保存历史记录
+              </motion.p>
+            )}
             <div className="flex flex-wrap justify-center gap-3">
               <motion.button onClick={resetTest} className="btn-secondary" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 再测一次
