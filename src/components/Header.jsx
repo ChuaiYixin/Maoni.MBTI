@@ -23,7 +23,7 @@ function Header() {
             />
           </motion.div>
           <div>
-            <h1 className="text-lg font-bold gradient-text leading-tight">MBTI 人格测试</h1>
+            <h1 className="text-lg font-bold gradient-text leading-tight">Maoni MBTI人格测试</h1>
             <p className="text-xs text-gray-600 leading-tight">发现你的性格类型</p>
           </div>
         </div>
