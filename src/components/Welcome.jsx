@@ -17,7 +17,7 @@ function Welcome({ onStart }) {
   }, [])
 
   return (
-    <div className="relative min-h-[calc(100vh-80px)] flex items-center justify-center overflow-hidden -mt-8">
+    <div className="relative min-h-[calc(100vh-40px)] flex items-center justify-center overflow-hidden -mt-4">
       {/* 背景装饰元素 - 铺满整个屏幕 */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div

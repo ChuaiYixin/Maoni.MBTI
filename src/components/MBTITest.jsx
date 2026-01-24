@@ -15,8 +15,8 @@ const OPTIONS = [
   { label: '完全符合', scoreA: 7, scoreB: 0, progressScore: 2 },
   { label: '比较符合', scoreA: 3, scoreB: 0, progressScore: 1 },
   { label: '不太清楚', scoreA: 1, scoreB: 1, progressScore: 0.5 },
-  { label: '不太符合', scoreA: 0, scoreB: 3, progressScore: 1 },
-  { label: '完全不符合', scoreA: 0, scoreB: 7, progressScore: 2 },
+  { label: '比较符合', scoreA: 0, scoreB: 3, progressScore: 1 },
+  { label: '完全符合', scoreA: 0, scoreB: 7, progressScore: 2 },
 ]
 
 // 每个维度进度分数线，达到即该维度做完
@@ -353,9 +353,7 @@ function MBTITest({ onBackToHome }) {
         >
           <div className="mb-6">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-semibold text-gray-600">
-                已答 {answeredTotal} 题 · 进度 {totalProgress.toFixed(1)} / {TOTAL_PROGRESS_MAX}
-              </span>
+              <span className="text-sm font-semibold text-gray-600">已答 {answeredTotal} 题</span>
               <span className="text-sm font-semibold text-purple-600">{Math.round(progress)}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
@@ -369,29 +367,41 @@ function MBTITest({ onBackToHome }) {
           </div>
 
           <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-800 mb-4 text-center">{currentQ.stem}</h2>
-          <p className="text-sm md:text-base lg:text-lg text-gray-500 text-center mb-8">
-            完全符合「{currentQ.positive}」↔ 完全不符合「{currentQ.negative}」
-          </p>
 
-          <div className="flex flex-nowrap justify-center items-center gap-3 md:gap-4 lg:gap-6 overflow-x-auto pb-2">
+          <div className="flex flex-col sm:flex-row items-stretch gap-3 sm:gap-6 mb-6 md:mb-8">
+            <div className="flex-1 rounded-2xl border-2 border-pink-200/60 bg-pink-50/50 p-4 md:p-5 flex flex-col justify-center">
+              <p className="text-sm md:text-base lg:text-lg text-gray-700">{currentQ.positive}</p>
+            </div>
+            <div className="flex sm:hidden justify-center py-1 text-gray-400 font-medium" aria-hidden="true">↔</div>
+            <div className="hidden sm:flex flex-shrink-0 items-center justify-center text-gray-300" aria-hidden="true">
+              <svg className="w-8 h-8 md:w-10 md:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h8m-8 4h8m-8 4h8" />
+              </svg>
+            </div>
+            <div className="flex-1 rounded-2xl border-2 border-purple-200/60 bg-purple-50/50 p-4 md:p-5 flex flex-col justify-center">
+              <p className="text-sm md:text-base lg:text-lg text-gray-700">{currentQ.negative}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-5 gap-1 sm:gap-2 md:gap-3 lg:gap-4">
             {OPTIONS.map((opt, index) => (
               <motion.button
                 key={index}
                 onClick={() => handleOptionClick(index, opt.scoreA, opt.scoreB, currentQ, nextQ.index)}
-                className="flex flex-col items-center p-3 md:p-4 lg:p-6 rounded-2xl glass-effect hover:bg-white/90 transition-all duration-300 border-2 border-transparent flex-shrink-0 min-w-[100px] md:min-w-[120px] lg:min-w-[140px]"
-                whileHover={{ scale: 1.1, y: -5 }}
-                whileTap={{ scale: 0.95, y: 0 }}
+                className="flex flex-col items-center p-2 sm:p-3 md:p-4 lg:p-5 rounded-xl sm:rounded-2xl glass-effect hover:bg-white/90 transition-all duration-300 border-2 border-transparent min-w-0"
+                whileHover={{ scale: 1.08, y: -4 }}
+                whileTap={{ scale: 0.96, y: 0 }}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.08 }}
               >
                 <motion.div
-                  className="relative w-12 h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 mb-3 flex items-center justify-center"
-                  whileHover={{ scale: 1.3 }}
+                  className="relative w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 mb-1.5 sm:mb-2 md:mb-3 flex items-center justify-center flex-shrink-0"
+                  whileHover={{ scale: 1.25 }}
                   transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                 >
                   <motion.div
-                    className="absolute inset-0 rounded-full border-2 md:border-[3px] lg:border-4 border-purple-400"
+                    className="absolute inset-0 rounded-full border-2 sm:border-[3px] border-purple-400"
                     animate={
                       selectedIndex === index
                         ? { scale: [1, 1.3, 1], opacity: [1, 0, 0] }
@@ -410,7 +420,7 @@ function MBTITest({ onBackToHome }) {
                     transition={{ duration: 0.3, type: 'spring', stiffness: 200, damping: 15 }}
                   />
                 </motion.div>
-                <span className="text-sm md:text-base lg:text-lg font-semibold text-gray-700 text-center">{opt.label}</span>
+                <span className="text-[10px] sm:text-xs md:text-sm lg:text-base font-semibold text-gray-700 text-center leading-tight break-keep">{opt.label}</span>
               </motion.button>
             ))}
           </div>
