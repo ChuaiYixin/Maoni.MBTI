@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabaseClient'
 
-function Auth({ onBack }) {
+function Auth({ onBack, onSkipLogin, onAuthSuccess, showSkipOption = false }) {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
@@ -19,6 +19,13 @@ function Auth({ onBack }) {
         options: { redirectTo: window.location.origin },
       })
       if (err) throw err
+      // Google登录会跳转，如果成功返回会触发onAuthStateChange
+      if (onAuthSuccess) {
+        // 延迟执行，等待登录状态更新
+        setTimeout(() => {
+          onAuthSuccess()
+        }, 500)
+      }
     } catch (err) {
       setError(err?.message || 'Google 登录失败，请重试')
     }
@@ -59,15 +66,33 @@ function Auth({ onBack }) {
         <p className="text-gray-600 mb-6">
           我们已向 <span className="font-semibold text-purple-600">{email}</span> 发送登录链接，点击链接即可完成登录。
         </p>
-        <motion.button
-          type="button"
-          onClick={onBack}
-          className="btn-secondary"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          返回
-        </motion.button>
+        <div className="space-y-3">
+          <motion.button
+            type="button"
+            onClick={onBack}
+            className="btn-secondary w-full"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            {showSkipOption ? '返回主页' : '返回'}
+          </motion.button>
+          {showSkipOption && onSkipLogin && (
+            <>
+              <motion.button
+                type="button"
+                onClick={onSkipLogin}
+                className="btn-secondary w-full"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                不登录直接测试
+              </motion.button>
+              <p className="text-xs text-gray-500 mt-3">
+                登录后可保存测试记录
+              </p>
+            </>
+          )}
+        </div>
       </motion.div>
     )
   }
@@ -155,10 +180,29 @@ function Auth({ onBack }) {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            返回
+            {showSkipOption ? '返回主页' : '返回'}
           </motion.button>
         </div>
       </form>
+
+      {showSkipOption && (
+        <>
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <motion.button
+              type="button"
+              onClick={onSkipLogin}
+              className="w-full btn-secondary"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              不登录直接测试
+            </motion.button>
+            <p className="text-xs text-gray-500 text-center mt-3">
+              登录后可保存测试记录
+            </p>
+          </div>
+        </>
+      )}
     </motion.div>
   )
 }

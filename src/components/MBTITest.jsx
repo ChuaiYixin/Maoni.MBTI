@@ -72,6 +72,8 @@ function MBTITest({ onBackToHome, user }) {
   const [resultProbabilities, setResultProbabilities] = useState(null)
   const [selectedIndex, setSelectedIndex] = useState(null)
   const [savedToHistory, setSavedToHistory] = useState(false)
+  // 答案历史：保存每道题的完整信息，用于回退
+  const [answerHistory, setAnswerHistory] = useState([])
 
   // 各维度当前进度分合计（只累加 progressScore，用于进度条与动态题量）
   const progressByDim = useMemo(() => {
@@ -118,6 +120,12 @@ function MBTITest({ onBackToHome, user }) {
 
   const nextQ = getNextQuestion()
   const currentQ = nextQ?.question
+  
+  // 检查当前题目是否已有答案（用于显示上一题的选中状态）
+  const currentQuestionAnswer = useMemo(() => {
+    if (!nextQ) return null
+    return answerHistory.find(a => a.questionIndex === nextQ.index)
+  }, [nextQ, answerHistory])
 
   const answeredTotal = useMemo(() => {
     return DIMENSION_ORDER.reduce((s, d) => s + answersByDim[d].length, 0)
@@ -230,10 +238,14 @@ function MBTITest({ onBackToHome, user }) {
       scoreB,
       optionIndex,
       progressScore,
+      questionIndex,
+      dim,
     }
     const next = { ...answersByDim, [dim]: [...(answersByDim[dim] || []), entry] }
     setAnswersByDim(next)
     setUsedQuestionIndices((prev) => new Set([...prev, questionIndex]))
+    // 保存到答案历史
+    setAnswerHistory((prev) => [...prev, entry])
     setSelectedIndex(null)
 
     // 更新后的各维度进度分（仅用 progressScore，与维度分无关）
@@ -275,6 +287,36 @@ function MBTITest({ onBackToHome, user }) {
     }, 300)
   }
 
+  // 上一题功能
+  const handlePreviousQuestion = useCallback(() => {
+    if (answerHistory.length === 0) return
+    
+    // 获取最后一题的答案
+    const lastAnswer = answerHistory[answerHistory.length - 1]
+    const { questionIndex, dim } = lastAnswer
+    
+    // 从answersByDim中移除最后一题
+    const newAnswersByDim = { ...answersByDim }
+    const dimAnswers = [...(newAnswersByDim[dim] || [])]
+    dimAnswers.pop()
+    newAnswersByDim[dim] = dimAnswers
+    setAnswersByDim(newAnswersByDim)
+    
+    // 从usedQuestionIndices中移除题目索引
+    setUsedQuestionIndices((prev) => {
+      const newSet = new Set(prev)
+      newSet.delete(questionIndex)
+      return newSet
+    })
+    
+    // 从答案历史中移除
+    setAnswerHistory((prev) => prev.slice(0, -1))
+    
+    // 更新当前题目索引为上一题的索引
+    setCurrentQuestionIndex(questionIndex)
+    setSelectedIndex(null)
+  }, [answerHistory, answersByDim])
+
   const resetTest = useCallback(() => {
     setShuffledQuestions(buildShuffledQuestions())
     setCurrentQuestionIndex(0)
@@ -283,6 +325,7 @@ function MBTITest({ onBackToHome, user }) {
     setShowResult(false)
     setResultProbabilities(null)
     setSavedToHistory(false)
+    setAnswerHistory([])
   }, [])
 
   const handleOptionClick = (optIndex, scoreA, scoreB, q, questionIndex) => {
@@ -438,11 +481,15 @@ function MBTITest({ onBackToHome, user }) {
           </div>
 
           <div className="grid grid-cols-5 gap-1 sm:gap-2 md:gap-3 lg:gap-4">
-            {OPTIONS.map((opt, index) => (
+            {OPTIONS.map((opt, index) => {
+              const isSelected = currentQuestionAnswer?.optionIndex === index
+              return (
               <motion.button
                 key={index}
                 onClick={() => handleOptionClick(index, opt.scoreA, opt.scoreB, currentQ, nextQ.index)}
-                className="flex flex-col items-center p-2 sm:p-3 md:p-4 lg:p-5 rounded-xl sm:rounded-2xl glass-effect hover:bg-white/90 transition-all duration-300 border-2 border-transparent min-w-0"
+                className={`flex flex-col items-center p-2 sm:p-3 md:p-4 lg:p-5 rounded-xl sm:rounded-2xl glass-effect hover:bg-white/90 transition-all duration-300 border-2 min-w-0 ${
+                  isSelected ? 'border-purple-400 bg-purple-50/50' : 'border-transparent'
+                }`}
                 whileHover={{ scale: 1.08, y: -4 }}
                 whileTap={{ scale: 0.96, y: 0 }}
                 initial={{ opacity: 0, y: 20 }}
@@ -467,8 +514,8 @@ function MBTITest({ onBackToHome, user }) {
                     className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-400 to-pink-400"
                     initial={{ scale: 0, opacity: 0 }}
                     animate={
-                      selectedIndex === index
-                        ? { scale: [0, 1.3, 1], opacity: [0, 1, 1] }
+                      selectedIndex === index || isSelected
+                        ? { scale: isSelected ? 1 : [0, 1.3, 1], opacity: isSelected ? 1 : [0, 1, 1] }
                         : { scale: 0, opacity: 0 }
                     }
                     transition={{ duration: 0.3, type: 'spring', stiffness: 200, damping: 15 }}
@@ -476,8 +523,23 @@ function MBTITest({ onBackToHome, user }) {
                 </motion.div>
                 <span className="text-[10px] sm:text-xs md:text-sm lg:text-base font-semibold text-gray-700 text-center leading-tight break-keep">{opt.label}</span>
               </motion.button>
-            ))}
+              )
+            })}
           </div>
+
+          {/* 上一题按钮 */}
+          {answerHistory.length > 0 && (
+            <div className="mt-6 flex justify-center">
+              <motion.button
+                onClick={handlePreviousQuestion}
+                className="btn-secondary px-6 py-3 text-sm md:text-base"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                ← 上一题
+              </motion.button>
+            </div>
+          )}
         </motion.div>
       </AnimatePresence>
     </div>

@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import logo from '../../57f50fc94153da8d3a1c653ffcc60976.jpg'
 
-function Header({ user, authLoading, onOpenAuth, onSignOut, onOpenProfile }) {
+function Header({ user, authLoading, onOpenAuth, onSignOut, onOpenProfile, onGoHome }) {
   return (
     <motion.header 
       className="glass-effect sticky top-0 z-50 shadow-lg"
@@ -10,7 +10,12 @@ function Header({ user, authLoading, onOpenAuth, onSignOut, onOpenProfile }) {
       transition={{ duration: 0.5 }}
     >
       <div className="w-full px-3 py-1 flex items-center justify-between">
-        <div className="flex items-center space-x-2">
+        <motion.div 
+          className="flex items-center space-x-2 cursor-pointer"
+          onClick={onGoHome}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+        >
           <motion.div
             className="w-8 h-8 rounded-full overflow-hidden border-2 border-purple-400 shadow-md"
             whileHover={{ scale: 1.1, rotate: 360 }}
@@ -26,7 +31,7 @@ function Header({ user, authLoading, onOpenAuth, onSignOut, onOpenProfile }) {
             <h1 className="text-lg font-bold gradient-text leading-tight">Maoni Personality</h1>
             <p className="text-xs text-gray-600 leading-tight">发现你的人格类型</p>
           </div>
-        </div>
+        </motion.div>
         
         <div className="flex items-center gap-2 ml-auto">
           {!authLoading && (

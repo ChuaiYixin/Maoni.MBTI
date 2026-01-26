@@ -25,17 +25,24 @@ function App() {
       })
       .catch(() => {})
       .finally(() => setAuthLoading(false))
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null)
+      // 如果是从开始测试进入的登录，登录成功后回到主页
+      if (event === 'SIGNED_IN' && session?.user && currentStep === 'auth-from-start') {
+        setCurrentStep('welcome')
+      }
     })
     const sub = data?.subscription
     return () => { sub?.unsubscribe?.() }
-  }, [])
+  }, [currentStep])
 
-  const handleStart = () => setCurrentStep('test')
+  const handleStart = () => setCurrentStep('auth-from-start')
   const handleBackToHome = () => setCurrentStep('welcome')
+  const handleGoHome = () => setCurrentStep('welcome')
   const handleOpenAuth = () => setCurrentStep('auth')
   const handleBackFromAuth = () => setCurrentStep('welcome')
+  const handleSkipLogin = () => setCurrentStep('test')
+  const handleAuthFromStartSuccess = () => setCurrentStep('welcome')
   const handleOpenProfile = () => setCurrentStep('profile')
   const handleBackFromProfile = () => setCurrentStep('welcome')
   const handleSignOut = async () => {
@@ -50,6 +57,7 @@ function App() {
         onOpenAuth={handleOpenAuth}
         onSignOut={handleSignOut}
         onOpenProfile={handleOpenProfile}
+        onGoHome={handleGoHome}
       />
 
       <main className={currentStep === 'welcome' ? '' : 'container mx-auto px-4 py-8'}>
@@ -78,16 +86,21 @@ function App() {
             </motion.div>
           )}
 
-          {currentStep === 'auth' && (
+          {(currentStep === 'auth' || currentStep === 'auth-from-start') && (
             <motion.div
-              key="auth"
+              key={currentStep}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
               className="container mx-auto px-4 py-8"
             >
-              <Auth onBack={handleBackFromAuth} />
+              <Auth 
+                onBack={currentStep === 'auth' ? handleBackFromAuth : handleBackToHome}
+                onSkipLogin={currentStep === 'auth-from-start' ? handleSkipLogin : undefined}
+                onAuthSuccess={currentStep === 'auth-from-start' ? handleAuthFromStartSuccess : undefined}
+                showSkipOption={currentStep === 'auth-from-start'}
+              />
             </motion.div>
           )}
 
