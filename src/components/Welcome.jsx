@@ -1,10 +1,149 @@
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useState } from 'react'
-import logo from '../../57f50fc94153da8d3a1c653ffcc60976.jpg'
+import enfj from '../../Maoni/enfj.PNG'
+import enfp from '../../Maoni/enfp.PNG'
+import entj from '../../Maoni/entj.PNG'
+import entp from '../../Maoni/entp.PNG'
+import esfj from '../../Maoni/esfj.PNG'
+import esfp from '../../Maoni/esfp.PNG'
+import estj from '../../Maoni/estj.PNG'
+import estp from '../../Maoni/estp.PNG'
+import infj from '../../Maoni/infj.PNG'
+import infp from '../../Maoni/infp.PNG'
+import intj from '../../Maoni/intj.PNG'
+import intp from '../../Maoni/intp.PNG'
+import isfj from '../../Maoni/isfj.PNG'
+import isfp from '../../Maoni/isfp.PNG'
+import istj from '../../Maoni/istj.PNG'
+import istp from '../../Maoni/istp.PNG'
+
+const allMaoniImages = [enfj, enfp, entj, entp, esfj, esfp, estj, estp, infj, infp, intj, intp, isfj, isfp, istj, istp]
+const allMaoniTypes = ['ENFJ', 'ENFP', 'ENTJ', 'ENTP', 'ESFJ', 'ESFP', 'ESTJ', 'ESTP', 'INFJ', 'INFP', 'INTJ', 'INTP', 'ISFJ', 'ISFP', 'ISTJ', 'ISTP']
+
+function shuffleArray(arr) {
+  const shuffled = [...arr]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
+function shuffleWithTypes(images, types) {
+  const combined = images.map((img, i) => ({ img, type: types[i] }))
+  for (let i = combined.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[combined[i], combined[j]] = [combined[j], combined[i]]
+  }
+  return combined
+}
+
+function getImageAverageColor(imgSrc, callback) {
+  const img = new Image()
+  
+  img.onload = function() {
+    try {
+      const canvas = document.createElement('canvas')
+      const width = this.naturalWidth || this.width || 100
+      const height = this.naturalHeight || this.height || 100
+      canvas.width = width
+      canvas.height = height
+      
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+      if (!ctx) {
+        console.warn('无法获取 Canvas 上下文')
+        callback('#000000')
+        return
+      }
+      
+      // 绘制图片到 canvas
+      ctx.drawImage(this, 0, 0, width, height)
+      
+      // 获取图片数据
+      let imageData
+      try {
+        imageData = ctx.getImageData(0, 0, width, height)
+      } catch (err) {
+        console.warn('getImageData 失败:', err)
+        callback('#000000')
+        return
+      }
+      
+      const data = imageData.data
+      if (!data || data.length === 0) {
+        console.warn('图片数据为空')
+        callback('#000000')
+        return
+      }
+      
+      // 颜色量化：将RGB值量化到32个级别（0-7, 8-15, ..., 248-255）
+      // 使用Map统计每个量化颜色的出现次数
+      const colorMap = new Map()
+      
+      // 采样：每4个像素采样一次以提高性能
+      for (let i = 0; i < data.length; i += 16) {
+        const alpha = data[i + 3]
+        // 只处理非透明像素
+        if (alpha > 10) {
+          const r = data[i]
+          const g = data[i + 1]
+          const b = data[i + 2]
+          
+          // 判断是否为白色（RGB都接近255）
+          const isWhite = r > 240 && g > 240 && b > 240
+          if (isWhite) continue // 跳过白色
+          
+          // 量化颜色：将RGB值量化到16个级别（每16个值一个级别）
+          const quantizedR = Math.floor(r / 16) * 16
+          const quantizedG = Math.floor(g / 16) * 16
+          const quantizedB = Math.floor(b / 16) * 16
+          const colorKey = `${quantizedR},${quantizedG},${quantizedB}`
+          
+          // 统计颜色出现次数
+          colorMap.set(colorKey, (colorMap.get(colorKey) || 0) + 1)
+        }
+      }
+      
+      // 找出出现次数最多的颜色
+      let maxCount = 0
+      let dominantColor = null
+      for (const [colorKey, count] of colorMap.entries()) {
+        if (count > maxCount) {
+          maxCount = count
+          dominantColor = colorKey
+        }
+      }
+      
+      if (dominantColor) {
+        const [r, g, b] = dominantColor.split(',').map(Number)
+        const color = `rgb(${r}, ${g}, ${b})`
+        console.log('计算出的最多颜色（除白色外）:', color, { r, g, b, count: maxCount })
+        callback(color)
+      } else {
+        console.warn('颜色计算失败：没有找到非白色像素')
+        callback('#000000')
+      }
+    } catch (err) {
+      console.error('颜色计算异常:', err)
+      callback('#000000')
+    }
+  }
+  
+  img.onerror = function() {
+    console.warn('图片加载失败:', imgSrc)
+    callback('#000000')
+  }
+  
+  // 设置图片源
+  img.src = imgSrc
+}
 
 function Welcome({ onStart }) {
   const [isLargeScreen, setIsLargeScreen] = useState(false)
   const [isPortrait, setIsPortrait] = useState(false)
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [maoniData] = useState(() => shuffleWithTypes(allMaoniImages, allMaoniTypes))
+  const [currentColor, setCurrentColor] = useState('#ec4899')
 
   useEffect(() => {
     const checkScreen = () => {
@@ -15,6 +154,29 @@ function Welcome({ onStart }) {
     window.addEventListener('resize', checkScreen)
     return () => window.removeEventListener('resize', checkScreen)
   }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % maoniData.length)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [maoniData.length])
+
+  const handleImageLoad = (e) => {
+    const img = e.target
+    if (img && img.src) {
+      // 使用图片的 src URL 来计算颜色
+      getImageAverageColor(img.src, setCurrentColor)
+    }
+  }
+
+  useEffect(() => {
+    // 当图片切换时，使用当前图片的 URL 计算颜色
+    const currentImgSrc = maoniData[currentImageIndex]?.img
+    if (currentImgSrc) {
+      getImageAverageColor(currentImgSrc, setCurrentColor)
+    }
+  }, [currentImageIndex, maoniData])
 
   return (
     <div className="relative min-h-[calc(100vh-40px)] flex items-center justify-center overflow-hidden -mt-4">
@@ -106,7 +268,7 @@ function Welcome({ onStart }) {
         />
       </div>
 
-      <div className="relative z-20 w-full max-w-7xl mx-auto px-4 md:px-8 lg:px-12">
+      <div className="relative z-20 w-full max-w-7xl mx-auto px-4 md:px-8 lg:px-12" style={{ marginLeft: '400px' }}>
         {isPortrait ? (
           /* 竖屏布局：Logo 在上，文字按钮在下 */
           <div className="flex flex-col items-center justify-center gap-6 md:gap-8">
@@ -124,16 +286,47 @@ function Welcome({ onStart }) {
             >
               <div className="relative">
                 <motion.div
-                  className="w-[280px] h-[280px] sm:w-[320px] sm:h-[320px] md:w-[360px] md:h-[360px] rounded-full overflow-hidden border-6 md:border-8 border-white shadow-2xl"
-                  whileHover={{ scale: 1.05, rotate: 5 }}
+                  className="w-[280px] h-[280px] sm:w-[320px] sm:h-[320px] md:w-[360px] md:h-[360px] overflow-hidden"
+                  whileHover={{ scale: 1.05 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <img
-                    src={logo}
-                    alt="MBTI Logo"
-                    className="w-full h-full object-cover"
-                  />
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.img
+                      key={currentImageIndex}
+                      src={maoniData[currentImageIndex].img}
+                      alt="Personality Logo"
+                      className="w-full h-full object-cover"
+                      initial={{ opacity: 0, scale: 0.92, filter: 'blur(8px)' }}
+                      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                      exit={{ opacity: 0, scale: 1.08, filter: 'blur(8px)' }}
+                      transition={{
+                        duration: 1.4,
+                        ease: [0.43, 0.13, 0.23, 0.96],
+                      }}
+                      onLoad={handleImageLoad}
+                    />
+                  </AnimatePresence>
                 </motion.div>
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.p
+                    key={`type-${currentImageIndex}`}
+                    className="text-2xl sm:text-3xl md:text-4xl font-black text-center -mt-[0.5em]"
+                    style={{ 
+                      color: currentColor, 
+                      letterSpacing: '0.2em',
+                      textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5), 0 0 8px rgba(0, 0, 0, 0.3)'
+                    }}
+                    initial={{ opacity: 0, scale: 0.92, filter: 'blur(8px)' }}
+                    animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, scale: 1.08, filter: 'blur(8px)' }}
+                    transition={{
+                      duration: 1.4,
+                      ease: [0.43, 0.13, 0.23, 0.96],
+                    }}
+                  >
+                    {maoniData[currentImageIndex].type}
+                  </motion.p>
+                </AnimatePresence>
                 <motion.div
                   className="absolute inset-0 rounded-full bg-gradient-to-r from-pink-400/40 via-purple-400/40 to-pink-400/40 blur-3xl -z-10"
                   animate={{
@@ -156,14 +349,14 @@ function Welcome({ onStart }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4, duration: 0.6 }}
             >
-              {/* 第一排：Maoni MBTI 大字 */}
-              <h1 className="text-4xl sm:text-5xl md:text-6xl font-black gradient-text leading-[0.9] mb-2 whitespace-nowrap">
-                Maoni MBTI
+              {/* 第一排：Maoni Personality 大字 */}
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-black gradient-text leading-[1.4] mb-10 whitespace-nowrap pb-4">
+                Maoni Personality
               </h1>
               
-              {/* 第二排：人格测试 中字 */}
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pink-600 leading-[0.9] mb-6 md:mb-8">
-                人格测试
+              {/* 第二排：人格类型测试（Inspired by MBTI） 中字 */}
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pink-600 leading-[0.9] mb-6 md:mb-8 -mt-6">
+                人格类型测试（Inspired by MBTI）
               </h2>
               
               {/* 第三排：按钮 */}
@@ -235,16 +428,47 @@ function Welcome({ onStart }) {
             >
               <div className="relative">
                 <motion.div
-                  className="w-[512px] h-[512px] md:w-[640px] md:h-[640px] lg:w-[768px] lg:h-[768px] rounded-full overflow-hidden border-8 md:border-12 border-white shadow-2xl"
-                  whileHover={{ scale: 1.05, rotate: 5 }}
+                  className="w-[512px] h-[512px] md:w-[640px] md:h-[640px] lg:w-[768px] lg:h-[768px] overflow-hidden"
+                  whileHover={{ scale: 1.05 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <img
-                    src={logo}
-                    alt="MBTI Logo"
-                    className="w-full h-full object-cover"
-                  />
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.img
+                      key={currentImageIndex}
+                      src={maoniData[currentImageIndex].img}
+                      alt="Personality Logo"
+                      className="w-full h-full object-cover"
+                      initial={{ opacity: 0, scale: 0.92, filter: 'blur(8px)' }}
+                      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                      exit={{ opacity: 0, scale: 1.08, filter: 'blur(8px)' }}
+                      transition={{
+                        duration: 1.4,
+                        ease: [0.43, 0.13, 0.23, 0.96],
+                      }}
+                      onLoad={handleImageLoad}
+                    />
+                  </AnimatePresence>
                 </motion.div>
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.p
+                    key={`type-${currentImageIndex}`}
+                    className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-black text-center -mt-[0.5em]"
+                    style={{ 
+                      color: currentColor, 
+                      letterSpacing: '0.2em',
+                      textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5), 0 0 8px rgba(0, 0, 0, 0.3)'
+                    }}
+                    initial={{ opacity: 0, scale: 0.92, filter: 'blur(8px)' }}
+                    animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, scale: 1.08, filter: 'blur(8px)' }}
+                    transition={{
+                      duration: 1.4,
+                      ease: [0.43, 0.13, 0.23, 0.96],
+                    }}
+                  >
+                    {maoniData[currentImageIndex].type}
+                  </motion.p>
+                </AnimatePresence>
                 <motion.div
                   className="absolute inset-0 rounded-full bg-gradient-to-r from-pink-400/40 via-purple-400/40 to-pink-400/40 blur-3xl -z-10"
                   animate={{
@@ -270,14 +494,14 @@ function Welcome({ onStart }) {
               }}
               transition={{ delay: 0.4, duration: 0.6 }}
             >
-              {/* 第一排：Maoni MBTI 大字（同一排） */}
-              <h1 className="text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black gradient-text leading-[0.9] mb-2 whitespace-nowrap">
-                Maoni MBTI
+              {/* 第一排：Maoni Personality 大字（同一排） */}
+              <h1 className="text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black gradient-text leading-[1.4] mb-10 whitespace-nowrap pb-4">
+                Maoni Personality
               </h1>
               
-              {/* 第二排：人格测试 中字 */}
-              <h2 className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-pink-600 leading-[0.9] mb-8">
-                人格测试
+              {/* 第二排：人格类型测试（Inspired by MBTI） 中字 */}
+              <h2 className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-pink-600 leading-[0.9] mb-8 -mt-6">
+                人格类型测试（Inspired by MBTI）
               </h2>
               
               {/* 第三排：按钮 */}

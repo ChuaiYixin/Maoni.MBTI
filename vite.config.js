@@ -41,6 +41,7 @@ export default defineConfig(() => {
   return {
     plugins: [react()],
     envDir: root,
+    assetsInclude: ['**/*.PNG', '**/*.png'],
     define: {
       'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(supabaseUrl),
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(supabaseKey),

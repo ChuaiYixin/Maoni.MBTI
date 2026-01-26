@@ -9,7 +9,7 @@ function Header({ user, authLoading, onOpenAuth, onSignOut, onOpenProfile }) {
       animate={{ y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <div className="container mx-auto px-3 py-1 flex items-center justify-between">
+      <div className="w-full px-3 py-1 flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <motion.div
             className="w-8 h-8 rounded-full overflow-hidden border-2 border-purple-400 shadow-md"
@@ -18,17 +18,17 @@ function Header({ user, authLoading, onOpenAuth, onSignOut, onOpenProfile }) {
           >
             <img 
               src={logo} 
-              alt="MBTI Logo" 
+              alt="Personality Logo" 
               className="w-full h-full object-cover"
             />
           </motion.div>
           <div>
-            <h1 className="text-lg font-bold gradient-text leading-tight">Maoni MBTI人格测试</h1>
-            <p className="text-xs text-gray-600 leading-tight">发现你的性格类型</p>
+            <h1 className="text-lg font-bold gradient-text leading-tight">Maoni Personality</h1>
+            <p className="text-xs text-gray-600 leading-tight">发现你的人格类型</p>
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-auto">
           {!authLoading && (
             user ? (
               <div className="flex items-center gap-2">
@@ -66,13 +66,6 @@ function Header({ user, authLoading, onOpenAuth, onSignOut, onOpenProfile }) {
               </motion.button>
             )
           )}
-          <motion.div
-            className="hidden md:flex items-center space-x-1.5 px-2 py-1 rounded-full bg-gradient-to-r from-purple-100 to-pink-100"
-            whileHover={{ scale: 1.05 }}
-          >
-            <span className="text-base">✨</span>
-            <span className="text-sm font-semibold text-purple-700">人格测试</span>
-          </motion.div>
         </div>
       </div>
     </motion.header>
