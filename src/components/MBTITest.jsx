@@ -62,22 +62,22 @@ const maoniImages = {
 }
 
 const mbtiTypes = {
-  'INTJ': { name: '建筑师', color: 'from-blue-500 to-indigo-600' },
-  'INTP': { name: '逻辑学家', color: 'from-indigo-500 to-purple-600' },
+  'INTJ': { name: '战略家', color: 'from-blue-500 to-indigo-600' },
+  'INTP': { name: '侦探', color: 'from-indigo-500 to-purple-600' },
   'ENTJ': { name: '指挥官', color: 'from-yellow-500 to-orange-600' },
-  'ENTP': { name: '辩论家', color: 'from-green-500 to-teal-600' },
-  'INFJ': { name: '提倡者', color: 'from-purple-500 to-pink-600' },
-  'INFP': { name: '调停者', color: 'from-pink-500 to-rose-600' },
+  'ENTP': { name: '发明家', color: 'from-green-500 to-teal-600' },
+  'INFJ': { name: '先知', color: 'from-purple-500 to-pink-600' },
+  'INFP': { name: '治愈师', color: 'from-pink-500 to-rose-600' },
   'ENFJ': { name: '主人公', color: 'from-rose-500 to-red-600' },
-  'ENFP': { name: '竞选者', color: 'from-cyan-500 to-blue-600' },
-  'ISTJ': { name: '物流师', color: 'from-gray-500 to-slate-600' },
-  'ISFJ': { name: '守卫者', color: 'from-teal-500 to-cyan-600' },
-  'ESTJ': { name: '总经理', color: 'from-blue-500 to-cyan-600' },
-  'ESFJ': { name: '执政官', color: 'from-yellow-500 to-amber-600' },
-  'ISTP': { name: '鉴赏家', color: 'from-orange-500 to-red-600' },
-  'ISFP': { name: '探险家', color: 'from-pink-500 to-fuchsia-600' },
-  'ESTP': { name: '企业家', color: 'from-red-500 to-pink-600' },
-  'ESFP': { name: '表演者', color: 'from-yellow-500 to-lime-600' },
+  'ENFP': { name: '梦想家', color: 'from-cyan-500 to-blue-600' },
+  'ISTJ': { name: '工程师', color: 'from-gray-500 to-slate-600' },
+  'ISFJ': { name: '护士', color: 'from-teal-500 to-cyan-600' },
+  'ESTJ': { name: '国王', color: 'from-blue-500 to-cyan-600' },
+  'ESFJ': { name: '主理人', color: 'from-yellow-500 to-amber-600' },
+  'ISTP': { name: '工匠', color: 'from-orange-500 to-red-600' },
+  'ISFP': { name: '艺术家', color: 'from-pink-500 to-fuchsia-600' },
+  'ESTP': { name: '竞技选手', color: 'from-red-500 to-pink-600' },
+  'ESFP': { name: '演员', color: 'from-yellow-500 to-lime-600' },
 }
 
 function getDimension(q) {
