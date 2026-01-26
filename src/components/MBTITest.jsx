@@ -1,7 +1,23 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import questionsData from '../../mbti-questions.json'
 import { supabase } from '../lib/supabaseClient'
+import enfj from '../../Maoni/enfj.PNG'
+import enfp from '../../Maoni/enfp.PNG'
+import entj from '../../Maoni/entj.PNG'
+import entp from '../../Maoni/entp.PNG'
+import esfj from '../../Maoni/esfj.PNG'
+import esfp from '../../Maoni/esfp.PNG'
+import estj from '../../Maoni/estj.PNG'
+import estp from '../../Maoni/estp.PNG'
+import infj from '../../Maoni/infj.PNG'
+import infp from '../../Maoni/infp.PNG'
+import intj from '../../Maoni/intj.PNG'
+import intp from '../../Maoni/intp.PNG'
+import isfj from '../../Maoni/isfj.PNG'
+import isfp from '../../Maoni/isfp.PNG'
+import istj from '../../Maoni/istj.PNG'
+import istp from '../../Maoni/istp.PNG'
 
 function shuffleQuestions(arr) {
   const a = [...arr]
@@ -25,23 +41,43 @@ const THRESHOLD_PER_DIM = 10
 const TOTAL_PROGRESS_MAX = 4 * THRESHOLD_PER_DIM // 40
 const DIMENSION_ORDER = ['EI', 'SN', 'TF', 'JP']
 
+// Maoni图片映射
+const maoniImages = {
+  'ENFJ': enfj,
+  'ENFP': enfp,
+  'ENTJ': entj,
+  'ENTP': entp,
+  'ESFJ': esfj,
+  'ESFP': esfp,
+  'ESTJ': estj,
+  'ESTP': estp,
+  'INFJ': infj,
+  'INFP': infp,
+  'INTJ': intj,
+  'INTP': intp,
+  'ISFJ': isfj,
+  'ISFP': isfp,
+  'ISTJ': istj,
+  'ISTP': istp,
+}
+
 const mbtiTypes = {
-  'INTJ': { name: '建筑师', emoji: '🧠', color: 'from-blue-500 to-indigo-600' },
-  'INTP': { name: '逻辑学家', emoji: '🔬', color: 'from-indigo-500 to-purple-600' },
-  'ENTJ': { name: '指挥官', emoji: '👑', color: 'from-yellow-500 to-orange-600' },
-  'ENTP': { name: '辩论家', emoji: '💡', color: 'from-green-500 to-teal-600' },
-  'INFJ': { name: '提倡者', emoji: '🌟', color: 'from-purple-500 to-pink-600' },
-  'INFP': { name: '调停者', emoji: '🦋', color: 'from-pink-500 to-rose-600' },
-  'ENFJ': { name: '主人公', emoji: '🎭', color: 'from-rose-500 to-red-600' },
-  'ENFP': { name: '竞选者', emoji: '🎨', color: 'from-cyan-500 to-blue-600' },
-  'ISTJ': { name: '物流师', emoji: '📋', color: 'from-gray-500 to-slate-600' },
-  'ISFJ': { name: '守卫者', emoji: '🛡️', color: 'from-teal-500 to-cyan-600' },
-  'ESTJ': { name: '总经理', emoji: '💼', color: 'from-blue-500 to-cyan-600' },
-  'ESFJ': { name: '执政官', emoji: '🤝', color: 'from-yellow-500 to-amber-600' },
-  'ISTP': { name: '鉴赏家', emoji: '🔧', color: 'from-orange-500 to-red-600' },
-  'ISFP': { name: '探险家', emoji: '🎪', color: 'from-pink-500 to-fuchsia-600' },
-  'ESTP': { name: '企业家', emoji: '🚀', color: 'from-red-500 to-pink-600' },
-  'ESFP': { name: '表演者', emoji: '🎉', color: 'from-yellow-500 to-lime-600' },
+  'INTJ': { name: '建筑师', color: 'from-blue-500 to-indigo-600' },
+  'INTP': { name: '逻辑学家', color: 'from-indigo-500 to-purple-600' },
+  'ENTJ': { name: '指挥官', color: 'from-yellow-500 to-orange-600' },
+  'ENTP': { name: '辩论家', color: 'from-green-500 to-teal-600' },
+  'INFJ': { name: '提倡者', color: 'from-purple-500 to-pink-600' },
+  'INFP': { name: '调停者', color: 'from-pink-500 to-rose-600' },
+  'ENFJ': { name: '主人公', color: 'from-rose-500 to-red-600' },
+  'ENFP': { name: '竞选者', color: 'from-cyan-500 to-blue-600' },
+  'ISTJ': { name: '物流师', color: 'from-gray-500 to-slate-600' },
+  'ISFJ': { name: '守卫者', color: 'from-teal-500 to-cyan-600' },
+  'ESTJ': { name: '总经理', color: 'from-blue-500 to-cyan-600' },
+  'ESFJ': { name: '执政官', color: 'from-yellow-500 to-amber-600' },
+  'ISTP': { name: '鉴赏家', color: 'from-orange-500 to-red-600' },
+  'ISFP': { name: '探险家', color: 'from-pink-500 to-fuchsia-600' },
+  'ESTP': { name: '企业家', color: 'from-red-500 to-pink-600' },
+  'ESFP': { name: '表演者', color: 'from-yellow-500 to-lime-600' },
 }
 
 function getDimension(q) {
@@ -74,6 +110,19 @@ function MBTITest({ onBackToHome, user }) {
   const [savedToHistory, setSavedToHistory] = useState(false)
   // 答案历史：保存每道题的完整信息，用于回退
   const [answerHistory, setAnswerHistory] = useState([])
+  const [isPortrait, setIsPortrait] = useState(false)
+  const [isLargeScreen, setIsLargeScreen] = useState(false)
+
+  // 检测屏幕方向和大小
+  useEffect(() => {
+    const checkScreen = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth)
+      setIsLargeScreen(window.innerWidth >= 1024)
+    }
+    checkScreen()
+    window.addEventListener('resize', checkScreen)
+    return () => window.removeEventListener('resize', checkScreen)
+  }, [])
 
   // 各维度当前进度分合计（只累加 progressScore，用于进度条与动态题量）
   const progressByDim = useMemo(() => {
@@ -228,6 +277,82 @@ function MBTITest({ onBackToHome, user }) {
     saveTestHistory(mostLikely, scores)
   }, [flattenDimensionScores, saveTestHistory])
 
+  // 调试功能：快速随机完成所有题目
+  const handleDebugComplete = useCallback(() => {
+    const debugAnswers = { ...answersByDim }
+    const debugUsed = new Set([...usedQuestionIndices])
+    const debugHistory = [...answerHistory]
+    
+    // 计算当前进度
+    const calculateProgress = (answers) => {
+      const progress = { EI: 0, SN: 0, TF: 0, JP: 0 }
+      DIMENSION_ORDER.forEach((dim) => {
+        (answers[dim] || []).forEach((a) => {
+          progress[dim] += a.progressScore
+        })
+      })
+      return progress
+    }
+    
+    let debugProgress = calculateProgress(debugAnswers)
+
+    // 继续答题直到所有维度完成
+    while (true) {
+      // 检查所有维度是否都完成
+      const allDimsDone = DIMENSION_ORDER.every((d) => isDimensionDone(debugProgress[d] || 0))
+      if (allDimsDone) {
+        break
+      }
+
+      // 找到下一个可用题目
+      const completedDims = new Set()
+      DIMENSION_ORDER.forEach((d) => {
+        if (isDimensionDone(debugProgress[d] || 0)) completedDims.add(d)
+      })
+
+      let found = false
+      for (let i = 0; i < shuffledQuestions.length; i++) {
+        if (debugUsed.has(i)) continue
+        const q = shuffledQuestions[i]
+        const dim = getDimension(q)
+        if (!completedDims.has(dim)) {
+          // 随机选择一个答案
+          const randomOptionIndex = Math.floor(Math.random() * OPTIONS.length)
+          const opt = OPTIONS[randomOptionIndex]
+          const entry = {
+            typeA: q.typeA,
+            typeB: q.typeB,
+            scoreA: opt.scoreA,
+            scoreB: opt.scoreB,
+            optionIndex: randomOptionIndex,
+            progressScore: opt.progressScore,
+            questionIndex: i,
+            dim,
+          }
+          debugAnswers[dim] = [...(debugAnswers[dim] || []), entry]
+          debugUsed.add(i)
+          debugHistory.push(entry)
+          debugProgress[dim] = (debugProgress[dim] || 0) + opt.progressScore
+          found = true
+          break
+        }
+      }
+
+      if (!found) {
+        break
+      }
+    }
+
+    // 更新所有状态
+    setAnswersByDim(debugAnswers)
+    setUsedQuestionIndices(debugUsed)
+    setAnswerHistory(debugHistory)
+    setShowResult(false)
+
+    // 计算并显示结果
+    setTimeout(() => calculateResultFromAnswers(debugAnswers), 100)
+  }, [answersByDim, usedQuestionIndices, answerHistory, shuffledQuestions, calculateResultFromAnswers])
+
   const handleAnswer = (scoreA, scoreB, optionIndex, q, questionIndex) => {
     const dim = getDimension(q)
     const progressScore = OPTIONS[optionIndex].progressScore
@@ -338,95 +463,353 @@ function MBTITest({ onBackToHome, user }) {
 
   if (showResult && resultProbabilities) {
     const { mostLikely, all } = resultProbabilities
-    const typeInfo = mbtiTypes[mostLikely] || { name: '未知', emoji: '❓', color: 'from-gray-500 to-gray-600' }
+    const typeInfo = mbtiTypes[mostLikely] || { name: '未知', color: 'from-gray-500 to-gray-600' }
+    const typeImage = maoniImages[mostLikely]
 
     return (
-      <motion.div
-        className="max-w-4xl mx-auto"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div className="glass-effect rounded-3xl p-8 md:p-12 shadow-2xl">
-          <div className="text-center mb-8">
-            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.2 }}>
-              <div className="text-8xl mb-4">{typeInfo.emoji}</div>
-            </motion.div>
-            <motion.h2
-              className={`text-6xl md:text-7xl font-bold mb-4 bg-gradient-to-r ${typeInfo.color} bg-clip-text text-transparent`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              {mostLikely}
-            </motion.h2>
-            <motion.p className="text-3xl font-semibold text-gray-700 mb-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
-              {typeInfo.name}
-            </motion.p>
-            <motion.p className="text-xl text-purple-600 font-bold" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
-              概率：{all[0][1].toFixed(1)}%
-            </motion.p>
-          </div>
-
-          <motion.div className="mt-8 space-y-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
-            <h3 className="text-2xl font-bold text-gray-800 mb-4 text-center">所有类型概率</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {all.map(([type, prob], index) => {
-                const info = mbtiTypes[type] || { name: '未知', emoji: '❓', color: 'from-gray-500 to-gray-600' }
-                const isMostLikely = type === mostLikely
-                return (
-                  <motion.div
-                    key={type}
-                    className={`p-4 rounded-xl glass-effect ${isMostLikely ? 'ring-2 ring-purple-400' : ''}`}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.7 + index * 0.02 }}
-                  >
-                    <div className="text-center">
-                      <div className="text-3xl mb-1">{info.emoji}</div>
-                      <div className={`text-lg font-bold ${isMostLikely ? 'text-purple-600' : 'text-gray-700'}`}>{type}</div>
-                      <div className="text-sm text-gray-600 mb-2">{info.name}</div>
-                      <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                        <motion.div
-                          className={`h-full ${isMostLikely ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gray-400'}`}
-                          initial={{ width: 0 }}
-                          animate={{ width: `${prob}%` }}
-                          transition={{ delay: 0.8 + index * 0.02, duration: 0.5 }}
-                        />
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">{prob.toFixed(1)}%</div>
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </div>
-          </motion.div>
-
-          <motion.div className="text-center mt-8 space-y-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}>
-            <p className="text-lg text-gray-600">🎉 测试完成！共答 {answeredTotal} 题</p>
-            {savedToHistory && (
-              <motion.p className="text-sm text-green-600" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.3 }}>
-                ✓ 已保存到历史记录
-              </motion.p>
-            )}
-            {!user && (
-              <motion.p className="text-sm text-gray-500" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.3 }}>
-                💡 登录可保存历史记录
-              </motion.p>
-            )}
-            <div className="flex flex-wrap justify-center gap-3">
-              <motion.button onClick={resetTest} className="btn-secondary" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                再测一次
-              </motion.button>
-              {onBackToHome && (
-                <motion.button onClick={onBackToHome} className="btn-secondary" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                  返回首页
-                </motion.button>
-              )}
-            </div>
-          </motion.div>
+      <div className="relative min-h-[calc(100vh-40px)] flex items-center justify-center overflow-hidden -mt-4">
+        {/* 背景装饰元素 - 铺满整个屏幕 */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <motion.div
+            className="absolute -left-[20vw] -top-[10vh] w-[70vw] h-[120vh] bg-gradient-to-r from-pink-200/60 via-pink-100/50 to-transparent blur-3xl"
+            animate={{
+              scale: [1, 1.1, 1],
+              x: [0, -30, 0],
+            }}
+            transition={{
+              duration: 8,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          />
+          <motion.div
+            className="absolute -right-[20vw] -top-[10vh] w-[70vw] h-[120vh] bg-gradient-to-l from-purple-200/60 via-purple-100/50 to-transparent blur-3xl"
+            animate={{
+              scale: [1, 1.1, 1],
+              x: [0, 30, 0],
+            }}
+            transition={{
+              duration: 10,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          />
         </div>
-      </motion.div>
+
+        {/* 直接布局，不使用限制宽度的容器 */}
+        {isPortrait ? (
+          /* 竖屏布局：竖向排列，内容居中 */
+          <div className="relative z-20 w-full flex flex-col items-center justify-center gap-6 md:gap-8 px-4 md:px-8 lg:px-12">
+              {/* "你的人格类型最有可能是"文字 - 在Logo上方 */}
+              <motion.p
+                className="text-2xl font-bold text-gray-800 mb-4 text-center"
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                你的人格类型最有可能是
+              </motion.p>
+
+              {/* Logo 居中 */}
+              <motion.div
+                className="flex-shrink-0"
+                initial={{ opacity: 0, y: -50 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: 'spring', stiffness: 100, damping: 15, delay: 0.3 }}
+              >
+                <div className="relative">
+                  <motion.div
+                    className="w-[280px] h-[280px] sm:w-[320px] sm:h-[320px] md:w-[360px] md:h-[360px] overflow-hidden"
+                    whileHover={{ scale: 1.05 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {typeImage ? (
+                      <motion.img
+                        src={typeImage}
+                        alt={mostLikely}
+                        className="w-full h-full object-cover"
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.5 }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-8xl">❓</div>
+                    )}
+                  </motion.div>
+                </div>
+              </motion.div>
+
+              {/* 文字信息 */}
+              <motion.div
+                className="flex flex-col items-center justify-center text-center"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5, duration: 0.6 }}
+              >
+                <motion.h2
+                  className={`text-4xl sm:text-5xl md:text-6xl font-bold mb-2 bg-gradient-to-r ${typeInfo.color} bg-clip-text text-transparent`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  {mostLikely}
+                </motion.h2>
+                <motion.p className="text-2xl sm:text-3xl font-semibold text-gray-700 mb-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
+                  {typeInfo.name}
+                </motion.p>
+                <motion.p className="text-xl text-purple-600 font-bold" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}>
+                  概率：{all[0][1].toFixed(1)}%
+                </motion.p>
+              </motion.div>
+
+              {/* 16个类型列表 */}
+              <motion.div
+                className="w-full mt-8"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8 }}
+              >
+                <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">所有类型概率</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {all.map(([type, prob], index) => {
+                    const info = mbtiTypes[type] || { name: '未知', color: 'from-gray-500 to-gray-600' }
+                    const typeImage = maoniImages[type]
+                    const isMostLikely = type === mostLikely
+                    return (
+                      <motion.div
+                        key={type}
+                        className={`p-3 rounded-xl glass-effect flex flex-col ${isMostLikely ? 'ring-2 ring-purple-400' : ''}`}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.9 + index * 0.02 }}
+                      >
+                        {/* 上方：LOGO和文字左右布局 */}
+                        <div className="flex items-center gap-2 mb-2 flex-1">
+                          {/* 左侧：LOGO（2倍大小） */}
+                          <div className="flex-shrink-0">
+                            {typeImage ? (
+                              <img 
+                                src={typeImage} 
+                                alt={type}
+                                className="w-24 h-24 md:w-32 md:h-32 object-cover rounded-full"
+                              />
+                            ) : (
+                              <div className="w-24 h-24 md:w-32 md:h-32 flex items-center justify-center text-4xl">❓</div>
+                            )}
+                          </div>
+                          {/* 右侧：类型和名称 */}
+                          <div className="flex flex-col justify-center flex-1">
+                            <div className={`text-lg font-bold ${isMostLikely ? 'text-purple-600' : 'text-gray-700'}`}>{type}</div>
+                            <div className="text-sm text-gray-600">{info.name}</div>
+                          </div>
+                        </div>
+                        {/* 下方：概率条和百分比 */}
+                        <div className="w-full">
+                          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                            <motion.div
+                              className={`h-full ${isMostLikely ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gray-400'}`}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${prob}%` }}
+                              transition={{ delay: 1.0 + index * 0.02, duration: 0.5 }}
+                            />
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1 text-center">{prob.toFixed(1)}%</div>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              </motion.div>
+
+              {/* 保存状态和按钮 */}
+              <motion.div
+                className="mt-8 text-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.2 }}
+              >
+                {savedToHistory && (
+                  <motion.p className="text-sm text-green-600 mb-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.3 }}>
+                    ✓ 已保存到历史记录
+                  </motion.p>
+                )}
+                {!user && (
+                  <motion.p className="text-sm text-gray-500 mb-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.3 }}>
+                    💡 登录可保存历史记录
+                  </motion.p>
+                )}
+                <div className="flex flex-wrap justify-center gap-3">
+                  <motion.button onClick={resetTest} className="btn-secondary" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    再测一次
+                  </motion.button>
+                  {onBackToHome && (
+                    <motion.button onClick={onBackToHome} className="btn-secondary" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      返回首页
+                    </motion.button>
+                  )}
+                </div>
+              </motion.div>
+          </div>
+        ) : (
+          /* 横屏布局：左侧LOGO+信息，右侧16个类型 */
+          <div className="relative z-20 w-full px-4 md:px-8 lg:px-12" style={{ marginLeft: '400px' }}>
+            <div className="flex flex-col lg:flex-row items-center lg:items-center gap-8 lg:gap-12 w-full">
+              {/* 左侧：LOGO和信息 - 位置与首页相同 */}
+              <motion.div
+                className="flex-shrink-0 flex flex-col"
+                initial={{ opacity: 0, x: -100 }}
+                animate={{ 
+                  opacity: 1, 
+                  x: isLargeScreen ? '-10vw' : 0 
+                }}
+                transition={{ type: 'spring', stiffness: 100, damping: 15, delay: 0.2 }}
+              >
+                {/* LOGO上方的文字 */}
+                <motion.p
+                  className="text-2xl font-bold text-gray-800 mb-4 text-center"
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  你的人格类型最有可能是
+                </motion.p>
+                <motion.div
+                  className="w-[512px] h-[512px] md:w-[640px] md:h-[640px] lg:w-[768px] lg:h-[768px] overflow-hidden"
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {typeImage ? (
+                    <motion.img
+                      src={typeImage}
+                      alt={mostLikely}
+                      className="w-full h-full object-cover"
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-8xl">❓</div>
+                  )}
+                </motion.div>
+                {/* LOGO下方的信息 */}
+                <motion.div
+                  className="flex flex-col items-center justify-center text-center mt-4"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <motion.h2
+                    className={`text-5xl md:text-6xl lg:text-7xl font-bold mb-2 bg-gradient-to-r ${typeInfo.color} bg-clip-text text-transparent`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.6 }}
+                  >
+                    {mostLikely}
+                  </motion.h2>
+                  <motion.p className="text-3xl md:text-4xl font-semibold text-gray-700 mb-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}>
+                    {typeInfo.name}
+                  </motion.p>
+                  <motion.p className="text-2xl text-purple-600 font-bold" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}>
+                    概率：{all[0][1].toFixed(1)}%
+                  </motion.p>
+                </motion.div>
+              </motion.div>
+
+              {/* 右侧：16个类型 */}
+              <motion.div
+                className="flex-1 flex flex-col items-center justify-center"
+                initial={{ opacity: 0, x: 100 }}
+                animate={{ 
+                  opacity: 1, 
+                  x: isLargeScreen ? '-10vw' : 0 
+                }}
+                transition={{ delay: 0.4, duration: 0.6 }}
+              >
+                <h3 className="text-2xl font-bold text-gray-800 mb-4 text-center">所有类型概率</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 auto-rows-fr">
+                  {all.map(([type, prob], index) => {
+                    const info = mbtiTypes[type] || { name: '未知', color: 'from-gray-500 to-gray-600' }
+                    const typeImage = maoniImages[type]
+                    const isMostLikely = type === mostLikely
+                    return (
+                      <motion.div
+                        key={type}
+                        className={`p-3 rounded-xl glass-effect flex flex-col ${isMostLikely ? 'ring-2 ring-purple-400' : ''}`}
+                        style={{ aspectRatio: '1 / 1', minWidth: '0' }}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.5 + index * 0.02 }}
+                      >
+                        {/* 上方：LOGO和文字左右布局 */}
+                        <div className="flex items-center gap-2 mb-2 flex-1">
+                          {/* 左侧：LOGO（2倍大小） */}
+                          <div className="flex-shrink-0">
+                            {typeImage ? (
+                              <img 
+                                src={typeImage} 
+                                alt={type}
+                                className="w-24 h-24 md:w-32 md:h-32 object-cover rounded-full"
+                              />
+                            ) : (
+                              <div className="w-24 h-24 md:w-32 md:h-32 flex items-center justify-center text-4xl">❓</div>
+                            )}
+                          </div>
+                          {/* 右侧：类型和名称 */}
+                          <div className="flex flex-col justify-center flex-1">
+                            <div className={`text-lg font-bold ${isMostLikely ? 'text-purple-600' : 'text-gray-700'}`}>{type}</div>
+                            <div className="text-sm text-gray-600">{info.name}</div>
+                          </div>
+                        </div>
+                        {/* 下方：概率条和百分比 */}
+                        <div className="w-full">
+                          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                            <motion.div
+                              className={`h-full ${isMostLikely ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gray-400'}`}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${prob}%` }}
+                              transition={{ delay: 0.6 + index * 0.02, duration: 0.5 }}
+                            />
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1 text-center">{prob.toFixed(1)}%</div>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+                
+                {/* 保存状态和按钮 */}
+                <motion.div
+                  className="mt-8 text-center"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.9 }}
+                >
+                  {savedToHistory && (
+                    <motion.p className="text-sm text-green-600 mb-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.0 }}>
+                      ✓ 已保存到历史记录
+                    </motion.p>
+                  )}
+                  {!user && (
+                    <motion.p className="text-sm text-gray-500 mb-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.0 }}>
+                      💡 登录可保存历史记录
+                    </motion.p>
+                  )}
+                  <div className="flex flex-wrap justify-center gap-3">
+                    <motion.button onClick={resetTest} className="btn-secondary" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      再测一次
+                    </motion.button>
+                    {onBackToHome && (
+                      <motion.button onClick={onBackToHome} className="btn-secondary" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                        返回首页
+                      </motion.button>
+                    )}
+                  </div>
+                </motion.div>
+              </motion.div>
+            </div>
+          </div>
+        )}
+      </div>
     )
   }
 
@@ -525,6 +908,18 @@ function MBTITest({ onBackToHome, user }) {
               </motion.button>
               )
             })}
+          </div>
+
+          {/* 调试按钮 */}
+          <div className="mt-6 flex justify-center gap-3">
+            <motion.button
+              onClick={handleDebugComplete}
+              className="px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              调试
+            </motion.button>
           </div>
 
           {/* 上一题按钮 */}

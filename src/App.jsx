@@ -60,7 +60,7 @@ function App() {
         onGoHome={handleGoHome}
       />
 
-      <main className={currentStep === 'welcome' ? '' : 'container mx-auto px-4 py-8'}>
+      <main className={currentStep === 'welcome' || currentStep === 'test' ? '' : 'container mx-auto px-4 py-8'}>
         <AnimatePresence mode="wait">
           {currentStep === 'welcome' && (
             <motion.div
