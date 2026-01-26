@@ -268,7 +268,7 @@ function Welcome({ onStart }) {
         />
       </div>
 
-      <div className="relative z-20 w-full max-w-7xl mx-auto px-4 md:px-8 lg:px-12" style={{ marginLeft: '400px' }}>
+      <div className="relative z-20 w-full max-w-7xl mx-auto px-4 md:px-8 lg:px-12" style={{ marginLeft: isPortrait ? '0px' : '400px' }}>
         {isPortrait ? (
           /* 竖屏布局：Logo 在上，文字按钮在下 */
           <div className="flex flex-col items-center justify-center gap-6 md:gap-8">
