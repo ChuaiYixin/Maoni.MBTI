@@ -36,7 +36,14 @@ function App() {
     return () => { sub?.unsubscribe?.() }
   }, [currentStep])
 
-  const handleStart = () => setCurrentStep('auth-from-start')
+  const handleStart = () => {
+    // 如果已登录，直接开始测试；否则显示登录弹窗
+    if (user) {
+      setCurrentStep('test')
+    } else {
+      setCurrentStep('auth-from-start')
+    }
+  }
   const handleBackToHome = () => setCurrentStep('welcome')
   const handleGoHome = () => setCurrentStep('welcome')
   const handleOpenAuth = () => setCurrentStep('auth')

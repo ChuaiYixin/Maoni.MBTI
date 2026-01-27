@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import questionsData from '../../mbti-questions.json'
 import { supabase } from '../lib/supabaseClient'
@@ -101,7 +101,9 @@ function isDimensionDone(progressSum) {
 
 function MBTITest({ onBackToHome, user }) {
   const [shuffledQuestions, setShuffledQuestions] = useState(buildShuffledQuestions)
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  // 新的答案存储：Record<questionId, optionIndex>
+  const [answers, setAnswers] = useState({})
+  // 旧的答案存储（用于计算结果，保持兼容）
   const [answersByDim, setAnswersByDim] = useState({ EI: [], SN: [], TF: [], JP: [] })
   const [usedQuestionIndices, setUsedQuestionIndices] = useState(new Set())
   const [showResult, setShowResult] = useState(false)
@@ -112,6 +114,23 @@ function MBTITest({ onBackToHome, user }) {
   const [answerHistory, setAnswerHistory] = useState([])
   const [isPortrait, setIsPortrait] = useState(false)
   const [isLargeScreen, setIsLargeScreen] = useState(false)
+  const questionRefs = useRef({})
+  
+  // 堆叠卡片相关状态
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [hoveredIndex, setHoveredIndex] = useState(null) // 悬停的卡片索引
+  const stackContainerRef = useRef(null)
+  const wheelLockRef = useRef(false)
+  const touchStartYRef = useRef(0)
+  const touchCurrentYRef = useRef(0)
+  const isTouchingRef = useRef(false)
+  // 惯性滚动相关
+  const wheelVelocityRef = useRef(0)
+  const wheelAnimationFrameRef = useRef(null)
+  const wheelLastTimeRef = useRef(0)
+  // 音效相关
+  const audioContextRef = useRef(null)
+  const playSoundRef = useRef(null)
 
   // 检测屏幕方向和大小
   useEffect(() => {
@@ -150,31 +169,271 @@ function MBTITest({ onBackToHome, user }) {
     return completedDims
   }, [progressByDim])
 
-  // 获取下一个可用题目（跳过已完成的维度）
-  const getNextQuestion = useCallback(() => {
+  // 获取所有可用题目（跳过已完成的维度）
+  const availableQuestions = useMemo(() => {
     const completedDims = getCompletedDims()
-    
-    // 从当前索引开始循环查找
-    for (let offset = 0; offset < shuffledQuestions.length; offset++) {
-      const i = (currentQuestionIndex + offset) % shuffledQuestions.length
-      if (usedQuestionIndices.has(i)) continue
-      const q = shuffledQuestions[i]
+    const available = []
+    shuffledQuestions.forEach((q, idx) => {
       const dim = getDimension(q)
       if (!completedDims.has(dim)) {
-        return { question: q, index: i }
+        available.push({ question: q, index: idx })
+      }
+    })
+    return available
+  }, [shuffledQuestions, getCompletedDims])
+
+  // 当前active题目
+  const currentQ = availableQuestions[activeIndex]?.question
+  const currentQIndex = availableQuestions[activeIndex]?.index
+
+  // 切换active卡片（带边界检查）
+  const changeActiveIndex = useCallback((delta) => {
+    setActiveIndex((prev) => {
+      const newIndex = prev + delta
+      return Math.max(0, Math.min(newIndex, availableQuestions.length - 1))
+    })
+  }, [availableQuestions.length])
+
+  // 处理答案选择：选择后自动切换到下一题
+  const handleAnswer = useCallback((scoreA, scoreB, optionIndex, q, availableQuestionsLength) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [String(q.id)]: optionIndex,
+    }))
+    setSelectedIndex(null)
+  }, [])
+
+  const handleOptionClick = useCallback((optIndex, scoreA, scoreB, q, questionIndex) => {
+    setSelectedIndex(optIndex)
+    setTimeout(() => {
+      handleAnswer(scoreA, scoreB, optIndex, q, availableQuestions.length)
+      setSelectedIndex(null)
+      // 延迟切换到下一题，让动画完成（只在这里切换一次）
+      setTimeout(() => {
+        setActiveIndex((prev) => {
+          const next = prev + 1
+          const newIndex = Math.min(next, availableQuestions.length - 1)
+          // 如果切换到了新题目，播放音效
+          if (newIndex !== prev && playSoundRef.current) {
+            try {
+              playSoundRef.current()
+            } catch (err) {
+              // 忽略音效错误
+            }
+          }
+          return newIndex
+        })
+      }, 200)
+    }, 300)
+  }, [handleAnswer, availableQuestions])
+
+  // 初始化音效
+  useEffect(() => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext
+      audioContextRef.current = new AudioContext()
+      
+      // 创建音效函数：简单的"滴答"声
+      playSoundRef.current = () => {
+        if (!audioContextRef.current) return
+        const oscillator = audioContextRef.current.createOscillator()
+        const gainNode = audioContextRef.current.createGain()
+        
+        oscillator.connect(gainNode)
+        gainNode.connect(audioContextRef.current.destination)
+        
+        oscillator.frequency.value = 800 // 频率
+        oscillator.type = 'sine'
+        
+        gainNode.gain.setValueAtTime(0.1, audioContextRef.current.currentTime)
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContextRef.current.currentTime + 0.1)
+        
+        oscillator.start(audioContextRef.current.currentTime)
+        oscillator.stop(audioContextRef.current.currentTime + 0.1)
+      }
+    } catch (err) {
+      console.warn('音效初始化失败:', err)
+    }
+  }, [])
+
+  // 惯性滚动动画
+  useEffect(() => {
+    if (wheelVelocityRef.current === 0) return
+
+    const animate = (currentTime) => {
+      if (wheelLastTimeRef.current === 0) {
+        wheelLastTimeRef.current = currentTime
+      }
+      
+      const deltaTime = currentTime - wheelLastTimeRef.current
+      wheelLastTimeRef.current = currentTime
+
+      if (Math.abs(wheelVelocityRef.current) > 0.1) {
+        // 应用惯性
+        const delta = wheelVelocityRef.current * deltaTime * 0.01
+        if (Math.abs(delta) >= 1) {
+          const direction = delta > 0 ? 1 : -1
+          setActiveIndex((prev) => {
+            const newIndex = prev + direction
+            const maxIndex = availableQuestions.length - 1
+            // 橡皮筋回弹：超出边界时回弹
+            if (newIndex < 0) {
+              wheelVelocityRef.current *= -0.3 // 回弹并减速
+              return 0
+            } else if (newIndex > maxIndex) {
+              wheelVelocityRef.current *= -0.3 // 回弹并减速
+              return maxIndex
+            }
+            return newIndex
+          })
+        }
+        
+        // 摩擦力减速
+        wheelVelocityRef.current *= 0.95
+        
+        wheelAnimationFrameRef.current = requestAnimationFrame(animate)
+      } else {
+        wheelVelocityRef.current = 0
+        wheelLastTimeRef.current = 0
       }
     }
-    return null
-  }, [currentQuestionIndex, shuffledQuestions, usedQuestionIndices, getCompletedDims])
 
-  const nextQ = getNextQuestion()
-  const currentQ = nextQ?.question
+    wheelAnimationFrameRef.current = requestAnimationFrame(animate)
+    
+    return () => {
+      if (wheelAnimationFrameRef.current) {
+        cancelAnimationFrame(wheelAnimationFrameRef.current)
+      }
+    }
+  }, [availableQuestions.length])
+
+  // 滚轮事件处理（桌面端）：带惯性滚动和音效
+  useEffect(() => {
+    const container = stackContainerRef.current
+    if (!container) return
+
+    const handleWheel = (e) => {
+      e.preventDefault()
+      
+      const currentTime = Date.now()
+      const deltaY = e.deltaY
+      
+      // 累积速度（惯性）
+      wheelVelocityRef.current += deltaY * 0.1
+      wheelVelocityRef.current = Math.max(-50, Math.min(50, wheelVelocityRef.current)) // 限制最大速度
+      
+      // 立即响应滚轮（不等待惯性）
+      if (!wheelLockRef.current) {
+        wheelLockRef.current = true
+        
+        const delta = deltaY > 0 ? 1 : -1
+        setActiveIndex((prev) => {
+          const newIndex = prev + delta
+          const maxIndex = availableQuestions.length - 1
+          // 橡皮筋回弹：超出边界时回弹
+          if (newIndex < 0) {
+            wheelVelocityRef.current *= -0.3 // 回弹并减速
+            return 0
+          } else if (newIndex > maxIndex) {
+            wheelVelocityRef.current *= -0.3 // 回弹并减速
+            return maxIndex
+          }
+          return newIndex
+        })
+        
+        // 播放音效
+        if (playSoundRef.current) {
+          try {
+            playSoundRef.current()
+          } catch (err) {
+            // 忽略音效错误
+          }
+        }
+        
+        setTimeout(() => {
+          wheelLockRef.current = false
+        }, 50)
+      }
+    }
+
+    container.addEventListener('wheel', handleWheel, { passive: false })
+    return () => container.removeEventListener('wheel', handleWheel)
+  }, [availableQuestions.length])
+
+  // 触摸事件处理（移动端）：避免 iOS 滑动与页面滚动冲突
+  useEffect(() => {
+    const container = stackContainerRef.current
+    if (!container) return
+
+    const handleTouchStart = (e) => {
+      isTouchingRef.current = true
+      touchStartYRef.current = e.touches[0].clientY
+      touchCurrentYRef.current = touchStartYRef.current
+    }
+
+    const handleTouchMove = (e) => {
+      if (!isTouchingRef.current) return
+      touchCurrentYRef.current = e.touches[0].clientY
+      const deltaY = Math.abs(touchStartYRef.current - touchCurrentYRef.current)
+      if (deltaY > 15) e.preventDefault()
+    }
+
+    const handleTouchEnd = () => {
+      if (!isTouchingRef.current) return
+      isTouchingRef.current = false
+
+      const deltaY = touchStartYRef.current - touchCurrentYRef.current
+      const threshold = 30
+
+      if (Math.abs(deltaY) > threshold) {
+        const delta = deltaY > 0 ? 1 : -1
+        changeActiveIndex(delta)
+      }
+    }
+
+    container.addEventListener('touchstart', handleTouchStart, { passive: true })
+    container.addEventListener('touchmove', handleTouchMove, { passive: false })
+    container.addEventListener('touchend', handleTouchEnd, { passive: true })
+
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart)
+      container.removeEventListener('touchmove', handleTouchMove)
+      container.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [changeActiveIndex])
+
+  // 键盘事件处理（可选）- 延迟初始化以避免顺序问题
+  useEffect(() => {
+    if (!handleOptionClick) return
+    
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        changeActiveIndex(-1)
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        changeActiveIndex(1)
+      } else if (e.key === 'Enter' || (e.key >= '1' && e.key <= '5')) {
+        if (currentQ && currentQIndex !== undefined) {
+          const optIndex = e.key === 'Enter' ? 0 : parseInt(e.key) - 1
+          if (optIndex >= 0 && optIndex < OPTIONS.length) {
+            const opt = OPTIONS[optIndex]
+            handleOptionClick(optIndex, opt.scoreA, opt.scoreB, currentQ, currentQIndex)
+          }
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [changeActiveIndex, currentQ, currentQIndex, handleOptionClick])
   
-  // 检查当前题目是否已有答案（用于显示上一题的选中状态）
+  // 当前题目的已选答案（用于回显）
   const currentQuestionAnswer = useMemo(() => {
-    if (!nextQ) return null
-    return answerHistory.find(a => a.questionIndex === nextQ.index)
-  }, [nextQ, answerHistory])
+    if (!currentQ) return null
+    const optIndex = answers[String(currentQ.id)]
+    return optIndex !== undefined ? { optionIndex: optIndex } : null
+  }, [currentQ, answers])
 
   const answeredTotal = useMemo(() => {
     return DIMENSION_ORDER.reduce((s, d) => s + answersByDim[d].length, 0)
@@ -196,37 +455,18 @@ function MBTITest({ onBackToHome, user }) {
     return out
   }, [])
 
-  // 生成 result_hash（SHA-256）
-  const generateResultHash = async (testVersion, type, scores) => {
-    const sortedScores = Object.keys(scores)
-      .sort()
-      .reduce((acc, key) => {
-        acc[key] = scores[key]
-        return acc
-      }, {})
-    const payload = JSON.stringify({ testVersion, type, scores: sortedScores })
-    const encoder = new TextEncoder()
-    const data = encoder.encode(payload)
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
-  }
-
-  // 保存测试历史记录
-  const saveTestHistory = useCallback(async (type, scores) => {
+  // 保存测试历史记录：answers 题目ID->选项(1-5)，type_probs 按 p 降序，result_type 第一名
+  const saveTestHistory = useCallback(async ({ answers, type_probs, result_type }) => {
     if (!user || !supabase) {
       setSavedToHistory(false)
       return
     }
     try {
-      const testVersion = 'v1'
-      const resultHash = await generateResultHash(testVersion, type, scores)
       const { error } = await supabase.from('mbti_attempts').insert({
         user_id: user.id,
-        test_version: testVersion,
-        type,
-        scores,
-        result_hash: resultHash,
+        answers,
+        type_probs,
+        result_type,
       })
       if (error) throw error
       setSavedToHistory(true)
@@ -274,37 +514,29 @@ function MBTITest({ onBackToHome, user }) {
     const mostLikely = sorted[0][0]
     setResultProbabilities({ mostLikely, all: sorted })
     setShowResult(true)
-    saveTestHistory(mostLikely, scores)
-  }, [flattenDimensionScores, saveTestHistory])
+
+    const type_probs = sorted.map(([t, p]) => ({ type: t, p: p / 100 }))
+    const answers = {}
+    DIMENSION_ORDER.forEach((dim) => {
+      (answersByDimSource[dim] || []).forEach((entry) => {
+        const q = shuffledQuestions[entry.questionIndex]
+        if (q) answers[String(q.id)] = entry.optionIndex + 1
+      })
+    })
+    saveTestHistory({ answers, type_probs, result_type: mostLikely })
+  }, [flattenDimensionScores, saveTestHistory, shuffledQuestions])
 
   // 调试功能：快速随机完成所有题目
   const handleDebugComplete = useCallback(() => {
-    const debugAnswers = { ...answersByDim }
-    const debugUsed = new Set([...usedQuestionIndices])
-    const debugHistory = [...answerHistory]
-    
-    // 计算当前进度
-    const calculateProgress = (answers) => {
-      const progress = { EI: 0, SN: 0, TF: 0, JP: 0 }
-      DIMENSION_ORDER.forEach((dim) => {
-        (answers[dim] || []).forEach((a) => {
-          progress[dim] += a.progressScore
-        })
-      })
-      return progress
-    }
-    
-    let debugProgress = calculateProgress(debugAnswers)
+    const debugAnswersByDim = { EI: [], SN: [], TF: [], JP: [] }
+    const debugUsed = new Set()
+    let debugProgress = { EI: 0, SN: 0, TF: 0, JP: 0 }
 
-    // 继续答题直到所有维度完成
+    // 随机答完所有维度
     while (true) {
-      // 检查所有维度是否都完成
       const allDimsDone = DIMENSION_ORDER.every((d) => isDimensionDone(debugProgress[d] || 0))
-      if (allDimsDone) {
-        break
-      }
+      if (allDimsDone) break
 
-      // 找到下一个可用题目
       const completedDims = new Set()
       DIMENSION_ORDER.forEach((d) => {
         if (isDimensionDone(debugProgress[d] || 0)) completedDims.add(d)
@@ -316,10 +548,9 @@ function MBTITest({ onBackToHome, user }) {
         const q = shuffledQuestions[i]
         const dim = getDimension(q)
         if (!completedDims.has(dim)) {
-          // 随机选择一个答案
           const randomOptionIndex = Math.floor(Math.random() * OPTIONS.length)
           const opt = OPTIONS[randomOptionIndex]
-          const entry = {
+          debugAnswersByDim[dim].push({
             typeA: q.typeA,
             typeB: q.typeB,
             scoreA: opt.scoreA,
@@ -328,139 +559,116 @@ function MBTITest({ onBackToHome, user }) {
             progressScore: opt.progressScore,
             questionIndex: i,
             dim,
-          }
-          debugAnswers[dim] = [...(debugAnswers[dim] || []), entry]
+          })
           debugUsed.add(i)
-          debugHistory.push(entry)
           debugProgress[dim] = (debugProgress[dim] || 0) + opt.progressScore
           found = true
           break
         }
       }
-
-      if (!found) {
-        break
-      }
+      if (!found) break
     }
 
-    // 更新所有状态
-    setAnswersByDim(debugAnswers)
-    setUsedQuestionIndices(debugUsed)
-    setAnswerHistory(debugHistory)
-    setShowResult(false)
-
-    // 计算并显示结果
-    setTimeout(() => calculateResultFromAnswers(debugAnswers), 100)
-  }, [answersByDim, usedQuestionIndices, answerHistory, shuffledQuestions, calculateResultFromAnswers])
-
-  const handleAnswer = (scoreA, scoreB, optionIndex, q, questionIndex) => {
-    const dim = getDimension(q)
-    const progressScore = OPTIONS[optionIndex].progressScore
-    const entry = {
-      typeA: q.typeA,
-      typeB: q.typeB,
-      scoreA,
-      scoreB,
-      optionIndex,
-      progressScore,
-      questionIndex,
-      dim,
-    }
-    const next = { ...answersByDim, [dim]: [...(answersByDim[dim] || []), entry] }
-    setAnswersByDim(next)
-    setUsedQuestionIndices((prev) => new Set([...prev, questionIndex]))
-    // 保存到答案历史
-    setAnswerHistory((prev) => [...prev, entry])
-    setSelectedIndex(null)
-
-    // 更新后的各维度进度分（仅用 progressScore，与维度分无关）
-    const nextProgress = { ...progressByDim }
-    nextProgress[dim] = (nextProgress[dim] || 0) + progressScore
-
-    // 检查所有维度是否都达到分数线
-    const allDimsDone = DIMENSION_ORDER.every((d) => isDimensionDone(nextProgress[d] || 0))
-
-    if (allDimsDone) {
-      setTimeout(() => calculateResultFromAnswers(next), 500)
-      return
-    }
-
-    // 找到下一个可用题目（从当前索引的下一个开始，跳过已完成的维度）
-    const usedPlusCurrent = new Set([...usedQuestionIndices, questionIndex])
-    setTimeout(() => {
-      const completedDims = new Set()
-      DIMENSION_ORDER.forEach((d) => {
-        if (isDimensionDone(nextProgress[d] || 0)) completedDims.add(d)
+    const debugAnswersRecord = {}
+    DIMENSION_ORDER.forEach((dim) => {
+      (debugAnswersByDim[dim] || []).forEach((entry) => {
+        const q = shuffledQuestions[entry.questionIndex]
+        if (q) debugAnswersRecord[String(q.id)] = entry.optionIndex
       })
-
-      let found = false
-      const startIndex = (questionIndex + 1) % shuffledQuestions.length
-      for (let offset = 0; offset < shuffledQuestions.length; offset++) {
-        const i = (startIndex + offset) % shuffledQuestions.length
-        if (usedPlusCurrent.has(i)) continue
-        const nextQu = shuffledQuestions[i]
-        const nextDim = getDimension(nextQu)
-        if (!completedDims.has(nextDim)) {
-          setCurrentQuestionIndex(i)
-          found = true
-          break
-        }
-      }
-      if (!found) {
-        setTimeout(() => calculateResultFromAnswers(next), 500)
-      }
-    }, 300)
-  }
-
-  // 上一题功能
-  const handlePreviousQuestion = useCallback(() => {
-    if (answerHistory.length === 0) return
-    
-    // 获取最后一题的答案
-    const lastAnswer = answerHistory[answerHistory.length - 1]
-    const { questionIndex, dim } = lastAnswer
-    
-    // 从answersByDim中移除最后一题
-    const newAnswersByDim = { ...answersByDim }
-    const dimAnswers = [...(newAnswersByDim[dim] || [])]
-    dimAnswers.pop()
-    newAnswersByDim[dim] = dimAnswers
-    setAnswersByDim(newAnswersByDim)
-    
-    // 从usedQuestionIndices中移除题目索引
-    setUsedQuestionIndices((prev) => {
-      const newSet = new Set(prev)
-      newSet.delete(questionIndex)
-      return newSet
     })
-    
-    // 从答案历史中移除
-    setAnswerHistory((prev) => prev.slice(0, -1))
-    
-    // 更新当前题目索引为上一题的索引
-    setCurrentQuestionIndex(questionIndex)
-    setSelectedIndex(null)
-  }, [answerHistory, answersByDim])
+
+    setShowResult(false)
+    setAnswers(debugAnswersRecord)
+    // useEffect 会同步 answersByDim 并调用 calculateResultFromAnswers
+  }, [shuffledQuestions])
+
+  // 从 answers (Record<questionId, optionIndex>) 同步到 answersByDim，并检测是否全部完成
+  useEffect(() => {
+    const newAnswersByDim = { EI: [], SN: [], TF: [], JP: [] }
+    const newUsedIndices = new Set()
+    const newAnswerHistory = []
+
+    Object.entries(answers).forEach(([questionId, optionIndex]) => {
+      const idx = shuffledQuestions.findIndex((qu) => String(qu.id) === questionId)
+      if (idx === -1) return
+      const q = shuffledQuestions[idx]
+      const dim = getDimension(q)
+      const opt = OPTIONS[optionIndex]
+      const entry = {
+        typeA: q.typeA,
+        typeB: q.typeB,
+        scoreA: opt.scoreA,
+        scoreB: opt.scoreB,
+        optionIndex,
+        progressScore: opt.progressScore,
+        questionIndex: idx,
+        dim,
+      }
+      newAnswersByDim[dim].push(entry)
+      newUsedIndices.add(idx)
+      newAnswerHistory.push(entry)
+    })
+
+    setAnswersByDim(newAnswersByDim)
+    setUsedQuestionIndices(newUsedIndices)
+    setAnswerHistory(newAnswerHistory)
+
+    const progress = { EI: 0, SN: 0, TF: 0, JP: 0 }
+    DIMENSION_ORDER.forEach((dim) => {
+      newAnswersByDim[dim].forEach((a) => {
+        progress[dim] += a.progressScore
+      })
+    })
+    const allDimsDone = DIMENSION_ORDER.every((d) => isDimensionDone(progress[d] || 0))
+    if (allDimsDone && Object.keys(answers).length > 0) {
+      setTimeout(() => calculateResultFromAnswers(newAnswersByDim), 500)
+    }
+  }, [answers, shuffledQuestions, calculateResultFromAnswers])
 
   const resetTest = useCallback(() => {
     setShuffledQuestions(buildShuffledQuestions())
-    setCurrentQuestionIndex(0)
+    setAnswers({})
     setAnswersByDim({ EI: [], SN: [], TF: [], JP: [] })
     setUsedQuestionIndices(new Set())
     setShowResult(false)
     setResultProbabilities(null)
     setSavedToHistory(false)
     setAnswerHistory([])
+    setActiveIndex(0)
   }, [])
 
-  const handleOptionClick = (optIndex, scoreA, scoreB, q, questionIndex) => {
-    setSelectedIndex(optIndex)
-    setTimeout(() => {
-      handleAnswer(scoreA, scoreB, optIndex, q, questionIndex)
-      setSelectedIndex(null)
-    }, 300)
-  }
+  // 调试信息
+  useEffect(() => {
+    console.log('[MBTITest Debug]', {
+      availableQuestionsLength: availableQuestions.length,
+      activeIndex,
+      currentQ: currentQ?.id,
+      currentQIndex,
+      answersCount: Object.keys(answers).length,
+      answersByDimCount: Object.values(answersByDim).reduce((sum, arr) => sum + arr.length, 0),
+    })
+  }, [availableQuestions.length, activeIndex, currentQ, currentQIndex, answers, answersByDim])
 
+  // 确保 activeIndex 在有效范围内
+  useEffect(() => {
+    if (availableQuestions.length > 0) {
+      if (activeIndex >= availableQuestions.length) {
+        setActiveIndex(0)
+      } else if (activeIndex < 0) {
+        setActiveIndex(0)
+      }
+    }
+  }, [availableQuestions.length, activeIndex])
+
+  // 窗口化渲染：只渲染 active 附近 N 张
+  // 前后各显示三张卡片堆叠
+  const WINDOW_BEFORE = 3 // 向上渲染3张
+  const WINDOW_AFTER = 3 // 向下渲染3张
+  const renderStart = Math.max(0, activeIndex - WINDOW_BEFORE)
+  const renderEnd = Math.min(availableQuestions.length, activeIndex + WINDOW_AFTER + 1)
+
+  // 所有早期返回必须在所有 hooks 之后
+  // 优先检查结果页面
   if (showResult && resultProbabilities) {
     const { mostLikely, all } = resultProbabilities
     const typeInfo = mbtiTypes[mostLikely] || { name: '未知', color: 'from-gray-500 to-gray-600' }
@@ -813,130 +1021,237 @@ function MBTITest({ onBackToHome, user }) {
     )
   }
 
-  if (!currentQ) {
-    return null
+  // 如果测试完成但还没有显示结果，等待结果显示
+  if (availableQuestions.length === 0 && !showResult) {
+    return (
+      <div className="w-full max-w-[95vw] mx-auto px-2 md:px-4 text-center py-12">
+        <p className="text-gray-600">暂无可用题目</p>
+      </div>
+    )
   }
 
   return (
     <div className="w-full max-w-[95vw] mx-auto px-2 md:px-4">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={nextQ.index}
-          className="glass-effect rounded-3xl p-6 md:p-8 lg:p-12 shadow-2xl w-full"
-          initial={{ opacity: 0, y: 30, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -30, scale: 0.95 }}
-          transition={{ 
-            duration: 0.4,
-            ease: [0.4, 0, 0.2, 1]
-          }}
+      {/* 固定在顶部的进度条 - 药丸形状 */}
+      <div className="sticky top-[60px] z-50 mb-4">
+        <div className="w-[80%] mx-auto bg-white/80 backdrop-blur-sm rounded-full px-6 py-4 shadow-lg border border-gray-200/50">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm font-semibold text-gray-600">已答 {answeredTotal} 题</span>
+            <span className="text-sm font-semibold text-purple-600">{Math.round(progress)}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+            <motion.div
+              className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-accent-500"
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 调试按钮 */}
+      <div className="sticky top-[140px] z-40 flex justify-center mb-4">
+        <motion.button
+          onClick={handleDebugComplete}
+          className="px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-semibold text-gray-600">已答 {answeredTotal} 题</span>
-              <span className="text-sm font-semibold text-purple-600">{Math.round(progress)}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-              <motion.div
-                className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-accent-500"
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.4, ease: 'easeOut' }}
-              />
-            </div>
-          </div>
+          调试
+        </motion.button>
+      </div>
 
-          <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-800 mb-4 text-center">{currentQ.stem}</h2>
+      {/* 堆叠卡片容器：固定高度，阻止页面滚动 */}
+      <div
+        ref={stackContainerRef}
+        className="relative w-full overflow-hidden flex items-center justify-center"
+        style={{ height: '75vh', minHeight: 420 }}
+        onWheel={(e) => e.stopPropagation()}
+      >
+        {availableQuestions.length > 0 && availableQuestions.slice(renderStart, renderEnd).map(({ question, index }, ii) => {
+          const stackIndex = renderStart + ii
+          const isActive = stackIndex === activeIndex
+          const chosen = answers[String(question.id)]
+          const isAnswered = chosen !== undefined
+          
+          // 计算堆叠位置：按索引顺序排列
+          // - 索引 < activeIndex 的卡片在上方（无论是否已回答）
+          // - 索引 > activeIndex 的卡片在下方（无论是否已回答）
+          // - 当前活跃卡片在中心（y = 0）
+          const offset = stackIndex - activeIndex
+          // 悬停状态：只对前面的卡片（offset < 0）有效
+          const isHovered = hoveredIndex === stackIndex && !isActive && offset < 0
+          let yOffset = 0
+          let zIndexValue = availableQuestions.length
+          let scaleValue = 1
+          let opacityValue = 1
+          let filterValue = 'none'
+          let clipPath = 'none'
+          
+          if (isActive) {
+            // 当前活跃卡片
+            yOffset = 0
+            zIndexValue = availableQuestions.length + 10
+            scaleValue = 1
+            opacityValue = 1
+            filterValue = 'none'
+            clipPath = 'none'
+          } else if (offset < 0) {
+            // 索引 < activeIndex：在上方，向上偏移，露出顶部题干
+            const layerCount = Math.abs(offset) // 距离活跃卡片的层数
+            const baseYOffset = -layerCount * 37.5 - 75 // 基础位置
+            yOffset = isHovered ? baseYOffset - 30 : baseYOffset // 悬停时向上提升30px
+            zIndexValue = availableQuestions.length - layerCount // 保持原层级
+            scaleValue = Math.max(0.7, 1 - layerCount * 0.08) // 保持原缩放，不放大
+            opacityValue = isHovered ? 1 : 0.85 // 悬停时取消半透明
+            filterValue = isHovered ? 'none' : 'saturate(0.7) brightness(0.95)' // 悬停时取消置灰
+            // 根据层数调整露出的高度，让上上张也能看到
+            if (isHovered) {
+              clipPath = 'none' // 悬停时完全显示，能看到题干
+            } else if (layerCount === 1) {
+              clipPath = 'inset(0 0 calc(100% - 140px) 0)' // 上一张：露出140px
+            } else if (layerCount === 2) {
+              clipPath = 'inset(0 0 calc(100% - 100px) 0)' // 上上张：露出100px
+            } else {
+              clipPath = 'inset(0 0 calc(100% - 80px) 0)' // 更上层：露出80px
+            }
+          } else {
+            // 索引 > activeIndex：在下方，向下偏移，露出底部（悬停动画无效）
+            const layerCount = offset // 距离活跃卡片的层数
+            const baseYOffset = layerCount * 37.5 + 75 // 基础位置
+            yOffset = baseYOffset // 不响应悬停
+            zIndexValue = availableQuestions.length - layerCount // 保持原层级
+            scaleValue = Math.max(0.7, 1 - layerCount * 0.08) // 保持原缩放
+            opacityValue = 1 // 底部卡片保持正常透明度
+            filterValue = 'none' // 底部卡片不改变颜色，统一白色
+            // 根据层数调整露出的高度
+            if (layerCount === 1) {
+              clipPath = 'inset(calc(100% - 100px) 0 0 0)' // 下一张：露出100px
+            } else {
+              clipPath = 'inset(calc(100% - 80px) 0 0 0)' // 更下层：露出80px
+            }
+          }
 
-          <div className="flex flex-col sm:flex-row items-stretch gap-3 sm:gap-6 mb-6 md:mb-8">
-            <div className="flex-1 rounded-2xl border-2 border-pink-200/60 bg-pink-50/50 p-4 md:p-5 flex flex-col justify-center">
-              <p className="text-sm md:text-base lg:text-lg text-gray-700">{currentQ.positive}</p>
-            </div>
-            <div className="flex sm:hidden justify-center py-1 text-gray-400 font-medium" aria-hidden="true">↔</div>
-            <div className="hidden sm:flex flex-shrink-0 items-center justify-center text-gray-300" aria-hidden="true">
-              <svg className="w-8 h-8 md:w-10 md:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h8m-8 4h8m-8 4h8" />
-              </svg>
-            </div>
-            <div className="flex-1 rounded-2xl border-2 border-purple-200/60 bg-purple-50/50 p-4 md:p-5 flex flex-col justify-center">
-              <p className="text-sm md:text-base lg:text-lg text-gray-700">{currentQ.negative}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-5 gap-1 sm:gap-2 md:gap-3 lg:gap-4">
-            {OPTIONS.map((opt, index) => {
-              const isSelected = currentQuestionAnswer?.optionIndex === index
-              return (
-              <motion.button
-                key={index}
-                onClick={() => handleOptionClick(index, opt.scoreA, opt.scoreB, currentQ, nextQ.index)}
-                className={`flex flex-col items-center p-2 sm:p-3 md:p-4 lg:p-5 rounded-xl sm:rounded-2xl glass-effect hover:bg-white/90 transition-all duration-300 border-2 min-w-0 ${
-                  isSelected ? 'border-purple-400 bg-purple-50/50' : 'border-transparent'
-                }`}
-                whileHover={{ scale: 1.08, y: -4 }}
-                whileTap={{ scale: 0.96, y: 0 }}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.08 }}
-              >
-                <motion.div
-                  className="relative w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 mb-1.5 sm:mb-2 md:mb-3 flex items-center justify-center flex-shrink-0"
-                  whileHover={{ scale: 1.25 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                >
-                  <motion.div
-                    className="absolute inset-0 rounded-full border-2 sm:border-[3px] border-purple-400"
-                    animate={
-                      selectedIndex === index
-                        ? { scale: [1, 1.3, 1], opacity: [1, 0, 0] }
-                        : { scale: 1, opacity: 1 }
-                    }
-                    transition={{ duration: 0.3, type: 'spring', stiffness: 200 }}
-                  />
-                  <motion.div
-                    className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-400 to-pink-400"
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={
-                      selectedIndex === index || isSelected
-                        ? { scale: isSelected ? 1 : [0, 1.3, 1], opacity: isSelected ? 1 : [0, 1, 1] }
-                        : { scale: 0, opacity: 0 }
-                    }
-                    transition={{ duration: 0.3, type: 'spring', stiffness: 200, damping: 15 }}
-                  />
-                </motion.div>
-                <span className="text-[10px] sm:text-xs md:text-sm lg:text-base font-semibold text-gray-700 text-center leading-tight break-keep">{opt.label}</span>
-              </motion.button>
-              )
-            })}
-          </div>
-
-          {/* 调试按钮 */}
-          <div className="mt-6 flex justify-center gap-3">
-            <motion.button
-              onClick={handleDebugComplete}
-              className="px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+          return (
+            <motion.div
+              key={question.id}
+              className="absolute w-[80%] rounded-3xl p-6 md:p-8 lg:p-10 glass-effect shadow-2xl cursor-pointer"
+              style={{
+                left: '50%',
+                top: '50%',
+                zIndex: zIndexValue,
+                pointerEvents: 'auto', // 允许点击所有卡片
+                transformOrigin: 'center center',
+                clipPath: clipPath !== 'none' ? clipPath : undefined,
+              }}
+              initial={false}
+              animate={{
+                x: '-50%',
+                y: `calc(-50% + ${yOffset}px)`,
+                scale: scaleValue,
+                opacity: opacityValue,
+                filter: filterValue,
+                boxShadow: isHovered || isActive
+                  ? '0 25px 50px -12px rgba(0,0,0,0.25)'
+                  : '0 10px 15px -3px rgba(0,0,0,0.1)',
+              }}
+              transition={{ 
+                type: 'spring', 
+                stiffness: 450, // 加快50%（300 * 1.5）
+                damping: 30 
+              }}
+              onMouseEnter={() => {
+                // 鼠标悬停时，只对前面的卡片（offset < 0）生效
+                if (!isActive && offset < 0) {
+                  setHoveredIndex(stackIndex)
+                }
+              }}
+              onMouseLeave={() => {
+                // 鼠标离开时，恢复原状
+                setHoveredIndex(null)
+              }}
+              onClick={(e) => {
+                // 点击卡片跳转到该卡片（带滚动动画）
+                // 如果点击的是选项按钮，不触发跳转
+                if (!isActive && e.target.closest('button') === null) {
+                  setActiveIndex(stackIndex)
+                }
+              }}
             >
-              调试
-            </motion.button>
-          </div>
+              <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 mb-4 text-center -mt-4">
+                {question.stem}
+              </h2>
 
-          {/* 上一题按钮 */}
-          {answerHistory.length > 0 && (
-            <div className="mt-6 flex justify-center">
-              <motion.button
-                onClick={handlePreviousQuestion}
-                className="btn-secondary px-6 py-3 text-sm md:text-base"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                ← 上一题
-              </motion.button>
-            </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
+              <div className="flex flex-col sm:flex-row items-stretch gap-3 sm:gap-4 mb-6">
+                <div className="flex-1 rounded-2xl border-2 border-pink-200/60 bg-pink-50/50 p-4 flex flex-col justify-center">
+                  <p className="text-sm md:text-base text-gray-700 text-center">{question.positive}</p>
+                </div>
+                <div className="flex sm:hidden justify-center py-1 text-gray-400 font-medium">↔</div>
+                <div className="hidden sm:flex flex-shrink-0 items-center justify-center text-gray-300">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h8m-8 4h8m-8 4h8" />
+                  </svg>
+                </div>
+                <div className="flex-1 rounded-2xl border-2 border-purple-200/60 bg-purple-50/50 p-4 flex flex-col justify-center">
+                  <p className="text-sm md:text-base text-gray-700 text-center">{question.negative}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-5 gap-1 sm:gap-2">
+                {OPTIONS.map((opt, optIndex) => {
+                  const isSelected = chosen === optIndex
+                  const isSelecting = isActive && selectedIndex === optIndex
+                  return (
+                    <motion.button
+                      key={optIndex}
+                      onClick={(e) => {
+                        e.stopPropagation() // 阻止事件冒泡到卡片
+                        if (isActive) {
+                          handleOptionClick(optIndex, opt.scoreA, opt.scoreB, question, index)
+                        }
+                      }}
+                      disabled={!isActive}
+                      className={`flex flex-col items-center p-2 sm:p-3 rounded-xl glass-effect transition-all border-2 min-w-0 ${
+                        isActive ? 'hover:bg-white/90 cursor-pointer' : 'cursor-default'
+                      } ${isSelected ? 'border-purple-400 bg-purple-50/50' : 'border-transparent'} ${
+                        !isActive ? 'opacity-70' : ''
+                      }`}
+                      whileHover={isActive ? { scale: 1.05, y: -2 } : {}}
+                      whileTap={isActive ? { scale: 0.98 } : {}}
+                    >
+                      <div className="relative w-8 h-8 sm:w-10 sm:h-10 mb-1.5 flex items-center justify-center flex-shrink-0">
+                        <motion.div
+                          className="absolute inset-0 rounded-full border-2 border-purple-400"
+                          animate={
+                            isSelecting
+                              ? { scale: [1, 1.3, 1], opacity: [1, 0, 0] }
+                              : { scale: 1, opacity: 1 }
+                          }
+                          transition={{ duration: 0.3, type: 'spring', stiffness: 200 }}
+                        />
+                        <motion.div
+                          className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-400 to-pink-400"
+                          initial={false}
+                          animate={
+                            isSelecting || isSelected
+                              ? { scale: isSelected && !isSelecting ? 1 : [0, 1.2, 1], opacity: 1 }
+                              : { scale: 0, opacity: 0 }
+                          }
+                          transition={{ duration: 0.3, type: 'spring', stiffness: 200, damping: 15 }}
+                        />
+                      </div>
+                      <span className="text-[10px] sm:text-xs font-semibold text-gray-700 text-center leading-tight break-keep">
+                        {opt.label}
+                      </span>
+                    </motion.button>
+                  )
+                })}
+              </div>
+            </motion.div>
+          )
+        })}
+      </div>
     </div>
   )
 }

@@ -6,6 +6,7 @@ function Profile({ user, onBack, onOpenAuth }) {
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [expandedId, setExpandedId] = useState(null)
 
   useEffect(() => {
     if (!user || !supabase) {
@@ -16,7 +17,7 @@ function Profile({ user, onBack, onOpenAuth }) {
       try {
         const { data, error: err } = await supabase
           .from('mbti_attempts')
-          .select('id, created_at, type, result_hash, test_version')
+          .select('id, created_at, result_type, answers, type_probs')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(50)
@@ -30,15 +31,6 @@ function Profile({ user, onBack, onOpenAuth }) {
     }
     fetchHistory()
   }, [user])
-
-  const copyHash = async (hash) => {
-    try {
-      await navigator.clipboard.writeText(hash)
-      alert('已复制到剪贴板')
-    } catch (err) {
-      alert('复制失败')
-    }
-  }
 
   const formatDate = (dateString) => {
     const date = new Date(dateString)
@@ -151,44 +143,51 @@ function Profile({ user, onBack, onOpenAuth }) {
         </div>
       ) : (
         <div className="space-y-3">
-          {history.map((item, index) => (
-            <motion.div
-              key={item.id}
-              className="glass-effect rounded-xl p-4 md:p-5 border border-gray-200/50 hover:border-purple-300 transition"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-2xl font-bold text-purple-600">{item.type}</span>
-                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                      {item.test_version}
-                    </span>
+          {history.map((item, index) => {
+            const expanded = expandedId === item.id
+            const top5 = (item.type_probs || []).slice(0, 5)
+            return (
+              <motion.div
+                key={item.id}
+                className="glass-effect rounded-xl p-4 md:p-5 border border-gray-200/50 hover:border-purple-300 transition"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setExpandedId(expanded ? null : item.id)}
+                  className="w-full text-left flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                >
+                  <span className="text-2xl font-bold text-purple-600">{item.result_type || '—'}</span>
+                  <span className="text-sm text-gray-600">{formatDate(item.created_at)}</span>
+                  <span className="text-gray-400">{expanded ? '▼' : '▶'}</span>
+                </button>
+                {expanded && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+                    <div>
+                      <div className="text-xs font-semibold text-gray-500 mb-1">type_probs (top 5)</div>
+                      <div className="text-sm text-gray-700">
+                        {top5.length ? top5.map(({ type: t, p }) => (
+                          <span key={t} className="mr-3">
+                            {t} {(p * 100).toFixed(1)}%
+                          </span>
+                        )) : '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-gray-500 mb-1">answers</div>
+                      <pre className="text-xs bg-gray-100 p-2 rounded font-mono text-gray-700 overflow-x-auto">
+                        {Object.keys(item.answers || {}).length
+                          ? JSON.stringify(item.answers, null, 2)
+                          : '{}'}
+                      </pre>
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-600 mb-2">
-                    {formatDate(item.created_at)}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500">Hash:</span>
-                    <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono text-gray-700 truncate max-w-[200px] sm:max-w-none">
-                      {item.result_hash}
-                    </code>
-                    <motion.button
-                      onClick={() => copyHash(item.result_hash)}
-                      className="text-xs text-purple-600 hover:text-purple-700 px-2 py-1 rounded hover:bg-purple-50 transition"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      title="复制"
-                    >
-                      📋
-                    </motion.button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          ))}
+                )}
+              </motion.div>
+            )
+          })}
         </div>
       )}
     </motion.div>
