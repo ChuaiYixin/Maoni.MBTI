@@ -9,13 +9,14 @@ import VerifyPage from './components/VerifyPage'
 import { supabase } from './lib/supabaseClient'
 import './App.css'
 
-// 是否为 NFC 验证页：/verify 或首页带 picc_data/cmac
+// 是否为 NFC 验证/调试页：/verify 或首页带 picc_data / enc / cmac 任一（便于调试不完整参数）
 function useIsVerifyRoute() {
   const [isVerify, setIsVerify] = useState(false)
   useEffect(() => {
     const path = window.location.pathname || '/'
     const params = new URLSearchParams(window.location.search)
-    setIsVerify(path === '/verify' || (path === '/' && params.has('picc_data') && params.has('cmac')))
+    const hasNfcParam = params.has('picc_data') || params.has('enc') || params.has('cmac')
+    setIsVerify(path === '/verify' || (path === '/' && hasNfcParam))
   }, [])
   return isVerify
 }

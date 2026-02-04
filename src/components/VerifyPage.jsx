@@ -1,6 +1,6 @@
 /**
- * NFC 验证结果页：从 URL 读取 picc_data / enc / cmac，调用后端 /api/verify，展示三种状态之一：
- * 验证通过（真卡）、验证失败（假卡/非官方）、参数不完整/非 NFC 扫描。
+ * NFC 验证结果页：从 URL 读取 picc_data / enc / cmac，调用后端 /api/verify，展示三种状态之一。
+ * 调试：页面顶部展示原始 URL、全部 query 参数、时间戳；可请求 /api/debug-sdm 查看后端中间结果。
  */
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
@@ -12,6 +12,14 @@ function parseVerifyParams() {
     enc: url.searchParams.get('enc') || '',
     cmac: url.searchParams.get('cmac') || '',
   }
+}
+
+/** 从当前 URL 解析出所有 query 的 key/value（包括 trial 等） */
+function getAllQueryParams() {
+  const url = new URL(window.location.href)
+  const entries = []
+  url.searchParams.forEach((value, key) => entries.push({ key, value }))
+  return entries
 }
 
 async function callVerifyAPI(params) {
@@ -26,11 +34,45 @@ async function callVerifyAPI(params) {
   return res.json()
 }
 
+async function callDebugSdmAPI() {
+  const url = new URL(window.location.href)
+  const base = typeof window !== 'undefined' ? window.location.origin : ''
+  const res = await fetch(`${base}/api/debug-sdm?${url.searchParams.toString()}`)
+  if (!res.ok) throw new Error(`调试接口请求失败: ${res.status}`)
+  return res.json()
+}
+
 export default function VerifyPage() {
   const params = useMemo(() => parseVerifyParams(), [])
-  const [status, setStatus] = useState('loading') // loading | success | failed | incomplete
+  const [status, setStatus] = useState('loading')
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
+
+  const [rawUrl, setRawUrl] = useState('')
+  const [queryParams, setQueryParams] = useState([])
+  const [pageTimestamp, setPageTimestamp] = useState('')
+  const [debugApiResult, setDebugApiResult] = useState(null)
+  const [debugLoading, setDebugLoading] = useState(false)
+  const [debugError, setDebugError] = useState('')
+
+  useEffect(() => {
+    setRawUrl(window.location.href)
+    setQueryParams(getAllQueryParams())
+    setPageTimestamp(new Date().toISOString())
+  }, [])
+
+  const loadDebugApi = useCallback(() => {
+    setDebugLoading(true)
+    setDebugError('')
+    callDebugSdmAPI()
+      .then((data) => {
+        setDebugApiResult(data)
+      })
+      .catch((e) => {
+        setDebugError(e.message || '请求失败')
+      })
+      .finally(() => setDebugLoading(false))
+  }, [])
 
   const hasNfcParams = !!(params.picc_data && params.cmac)
 
@@ -134,7 +176,67 @@ export default function VerifyPage() {
 
   return (
     <div className="min-h-[calc(100vh-60px)] flex items-center justify-center p-4">
-      <div className="w-full max-w-3xl mx-auto">
+      <div className="w-full max-w-4xl mx-auto space-y-6">
+        {/* ========== 调试信息（DEBUG）：原始 URL、全部 query、时间戳 ========== */}
+        <motion.div
+          className="glass-effect rounded-2xl p-4 md:p-5 shadow-lg text-left border-2 border-amber-200"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <h3 className="text-lg font-bold text-amber-800 mb-3">🔧 调试信息（DEBUG）</h3>
+          <div className="space-y-2 text-sm font-mono break-all">
+            <div>
+              <span className="text-gray-600 font-sans">原始 URL：</span>
+              <span className="text-gray-900">{rawUrl || window.location?.href || '-'}</span>
+            </div>
+            <div>
+              <span className="text-gray-600 font-sans">当前时间戳：</span>
+              <span className="text-gray-900">{pageTimestamp || new Date().toISOString()}</span>
+            </div>
+            <div className="pt-2">
+              <span className="text-gray-600 font-sans">Query 参数（key / value）：</span>
+              <ul className="mt-1 list-disc list-inside space-y-1 text-gray-900">
+                {queryParams.length === 0 ? (
+                  <li>（无）</li>
+                ) : (
+                  queryParams.map(({ key, value }) => (
+                    <li key={key}>
+                      <strong>{key}</strong> = {value.length > 120 ? `${value.slice(0, 120)}…` : value}
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ========== 后端调试 API：获取 /api/debug-sdm 结果 ========== */}
+        <motion.div
+          className="glass-effect rounded-2xl p-4 md:p-5 shadow-lg text-left border-2 border-blue-200"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+        >
+          <h3 className="text-lg font-bold text-blue-800 mb-3">🔧 后端调试 API（DEBUG ONLY）</h3>
+          <p className="text-sm text-gray-600 mb-3">调用 GET /api/debug-sdm，查看服务器端中间计算结果（非最终验证逻辑）。</p>
+          <button
+            type="button"
+            className="btn-secondary text-sm mb-3"
+            onClick={loadDebugApi}
+            disabled={debugLoading}
+          >
+            {debugLoading ? '请求中…' : '获取后端调试数据'}
+          </button>
+          {debugError && <p className="text-sm text-red-600 mb-2">{debugError}</p>}
+          {debugApiResult && (
+            <pre className="bg-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-96 overflow-y-auto border border-gray-300">
+              {JSON.stringify(debugApiResult, null, 2)}
+            </pre>
+          )}
+        </motion.div>
+
+        {/* ========== 验证结果状态 ========== */}
         <motion.div
           className="glass-effect rounded-3xl p-6 md:p-8 shadow-2xl flex flex-col items-center text-center"
           initial={{ opacity: 0, y: 20 }}
