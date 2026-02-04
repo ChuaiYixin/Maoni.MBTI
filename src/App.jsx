@@ -9,9 +9,19 @@ import VerifyPage from './components/VerifyPage'
 import { supabase } from './lib/supabaseClient'
 import './App.css'
 
-function App() {
-  const isVerifyRoute = typeof window !== 'undefined' && window.location?.pathname === '/verify'
+// 是否为 NFC 验证页：/verify 或首页带 picc_data/cmac
+function useIsVerifyRoute() {
+  const [isVerify, setIsVerify] = useState(false)
+  useEffect(() => {
+    const path = window.location.pathname || '/'
+    const params = new URLSearchParams(window.location.search)
+    setIsVerify(path === '/verify' || (path === '/' && params.has('picc_data') && params.has('cmac')))
+  }, [])
+  return isVerify
+}
 
+function App() {
+  const isVerifyRoute = useIsVerifyRoute()
   const [currentStep, setCurrentStep] = useState('welcome') // welcome | test | auth | profile
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
@@ -59,19 +69,19 @@ function App() {
     if (supabase) await supabase.auth.signOut()
   }
 
-  // 单页模拟路由：/verify 进入 NFC/验证页，不进入原有测试流
+  // NFC 验证页：扫码进入时只显示验证结果，不显示主流程
   if (isVerifyRoute) {
     return (
       <div className="min-h-screen">
         <Header
           user={user}
           authLoading={authLoading}
-          onOpenAuth={() => {}}
+          onOpenAuth={handleOpenAuth}
           onSignOut={handleSignOut}
-          onOpenProfile={() => {}}
-          onGoHome={() => { window.location.href = '/' }}
+          onOpenProfile={handleOpenProfile}
+          onGoHome={handleGoHome}
         />
-        <main className="container mx-auto px-4 py-8">
+        <main>
           <VerifyPage />
         </main>
       </div>
