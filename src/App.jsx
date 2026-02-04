@@ -5,10 +5,13 @@ import Welcome from './components/Welcome'
 import MBTITest from './components/MBTITest'
 import Auth from './components/Auth'
 import Profile from './components/Profile'
+import VerifyPage from './components/VerifyPage'
 import { supabase } from './lib/supabaseClient'
 import './App.css'
 
 function App() {
+  const isVerifyRoute = typeof window !== 'undefined' && window.location?.pathname === '/verify'
+
   const [currentStep, setCurrentStep] = useState('welcome') // welcome | test | auth | profile
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
@@ -54,6 +57,25 @@ function App() {
   const handleBackFromProfile = () => setCurrentStep('welcome')
   const handleSignOut = async () => {
     if (supabase) await supabase.auth.signOut()
+  }
+
+  // 单页模拟路由：/verify 进入 NFC/验证页，不进入原有测试流
+  if (isVerifyRoute) {
+    return (
+      <div className="min-h-screen">
+        <Header
+          user={user}
+          authLoading={authLoading}
+          onOpenAuth={() => {}}
+          onSignOut={handleSignOut}
+          onOpenProfile={() => {}}
+          onGoHome={() => { window.location.href = '/' }}
+        />
+        <main className="container mx-auto px-4 py-8">
+          <VerifyPage />
+        </main>
+      </div>
+    )
   }
 
   return (
